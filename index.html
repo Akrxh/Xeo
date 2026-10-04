@@ -10,26 +10,29 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-analytics.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
   const firebaseConfig = {
-    apiKey: "AIzaSyCfVy9MSOgJNbnjJRASRCprf5PZ-StHMIA",
+    apiKey: "AIzaSyCrCh_HuHPnucfva_o5A1-qdeNGs9Tiq14",
     authDomain: "techthetic-97952.firebaseapp.com",
     projectId: "techthetic-97952",
     storageBucket: "techthetic-97952.firebasestorage.app",
     messagingSenderId: "881879453249",
-    appId: "1:881879453249:web:d2857d92c75b7d35cec0c0",
-    measurementId: "G-0J0FJ6H3VC"
+    appId: "1:881879453249:web:490ea996eb081219cec0c0",
+    measurementId: "G-XZXPPCESTK"
   };
 
   try {
     const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
     let analytics = null;
     try {
       analytics = getAnalytics(app);
     } catch (analyticsError) {
       console.warn("XEO Firebase Analytics could not start in this environment.", analyticsError);
     }
-    window.XEOFirebase = { app, analytics, config: firebaseConfig, connected: true };
+    window.XEOFS = { collection, doc, setDoc, getDocs, deleteDoc, onSnapshot };
+    window.XEOFirebase = { app, analytics, db, config: firebaseConfig, connected: true };
     window.dispatchEvent(new CustomEvent("xeo-firebase-ready"));
     console.log("XEO Firebase connected successfully.");
   } catch (firebaseError) {
@@ -315,6 +318,7 @@ button{cursor:pointer}
         <button data-page="crew">Crew</button>
         <button data-page="inbox">Inbox <span id="sideInboxBadge"></span></button>
         <button data-page="profile">Account</button>
+        <button onclick="logout()">Logout</button>
       </nav>
       <span class="net-tag" id="netTagSide"><i></i><span>Online</span></span>
       <div class="side-bottom">
@@ -556,6 +560,7 @@ button{cursor:pointer}
               <div class="row" style="margin-top:15px">
                 <button class="btn" onclick="editProfile()">EDIT PROFILE</button>
                 <button class="btn" onclick="togglePrivacy()">ACTIVITY: <span id="privacyText">PUBLIC</span></button>
+                <button class="btn black" onclick="logout()">LOGOUT</button>
               </div>
 
             </div>
@@ -604,6 +609,7 @@ button{cursor:pointer}
         <button data-page="crew">Crew</button>
         <button data-page="inbox">Inbox <span id="drawerInboxBadge"></span></button>
         <button data-page="profile">Account</button>
+        <button onclick="logout()">Logout</button>
       </div>
       <span class="net-tag" id="netTagDrawer"><i></i><span>Online</span></span>
     </aside>
@@ -756,7 +762,9 @@ function defaultState(){
     crewId:null,
     crews:[],
     streak:0,
-    lastActiveDate:""
+    lastActiveDate:"",
+    personalOwner:null,
+    pending:false
   };
 }
 
@@ -764,15 +772,25 @@ function loadState(){
   try{
     const raw=localStorage.getItem(STORAGE_KEY);
     if(!raw){return defaultState();}
-    const s=JSON.parse(raw);
-    return Object.assign(defaultState(),s);
+    const s=Object.assign(defaultState(),JSON.parse(raw));
+    if(s.account){
+      const i=s.users.findIndex(u=>u.id===s.account.id);
+      if(i>=0){s.users[i]=s.account;}
+    }
+    return s;
   }catch(e){
     return defaultState();
   }
 }
 
-function save(){
+function persist(){
   localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+}
+
+function save(){
+  state.pending=true;
+  persist();
+  cloudPush();
 }
 
 function $(id){
@@ -850,13 +868,17 @@ document.querySelectorAll(".device").forEach(btn=>{
   });
 });
 
-$("deviceContinue").onclick=function(){
+$("deviceContinue").onclick=async function(){
   if(!selectedDevice){
     showToast("Choose your device first.");
     return;
   }
   state.device=selectedDevice;
-  save();
+  persist();
+  if(!SYNC.ready){
+    showToast("Connecting to XEO cloud...");
+    await Promise.race([SYNC.promise,new Promise(r=>setTimeout(r,6000))]);
+  }
   $("deviceScreen").classList.add("hidden");
   $("accountScreen").classList.remove("hidden");
   authMode=state.users.length?"login":"create";
@@ -919,6 +941,7 @@ function processAuth(){
     }
     state.accountId=account.id;
     state.account=account;
+    applyPersonalFor(account.id);
     if(!state.device){
       state.device=selectedDevice||"Android";
     }
@@ -967,6 +990,8 @@ function processAuth(){
     notifications:[]
   };
 
+  resetPersonal();
+  state.personalOwner=account.id;
   state.users.push(account);
   state.account=account;
   state.accountId=account.id;
@@ -991,10 +1016,14 @@ function launchApp(){
   renderAll();
 }
 
-function logout(){
+async function logout(){
+  if(!confirm("Log out of XEO?")){return;}
+  try{
+    await Promise.race([doPush(),new Promise(r=>setTimeout(r,2500))]);
+  }catch(e){}
   state.account=null;
   state.accountId=null;
-  save();
+  persist();
   location.reload();
 }
 
@@ -1028,7 +1057,8 @@ function ensureDaily(){
   if(state.lastActiveDate!==key){
     state.completed={};
     state.lastActiveDate=key;
-    save();
+    persist();
+    cloudPush();
   }
 }
 
@@ -1830,6 +1860,7 @@ function adminDelete(id){
   }
 
   state.users=state.users.filter(u=>u.id!==id);
+  cloudDelete("xeo_users",id);
   state.friends=state.friends.filter(x=>x!==id);
 
   state.crews.forEach(c=>{
@@ -1885,7 +1916,294 @@ window.addEventListener("offline",updateNetTag);
 updateNetTag();
 
 
+/* CLOUD SYNC (Firestore) */
+
+const PERSONAL=["friends","requests","inbox","feed","tasks","completed","mode","privacy","crewId","streak","lastActiveDate"];
+const SYNC={ready:false,synced:{},cloudData:{},timer:null,listening:false,warned:false,promise:null};
+
+function cloud(){
+  const f=window.XEOFirebase,fs=window.XEOFS;
+  return (f&&f.connected&&f.db&&fs)?Object.assign({db:f.db},fs):null;
+}
+
+function waitFirebase(ms){
+  return new Promise(res=>{
+    if(window.XEOFirebase){return res();}
+    let done=false;
+    const fin=()=>{if(!done){done=true;res();}};
+    setTimeout(fin,ms);
+    window.addEventListener("xeo-firebase-ready",fin,{once:true});
+    window.addEventListener("xeo-firebase-error",fin,{once:true});
+  });
+}
+
+function syncWarn(){
+  if(SYNC.warned){return;}
+  SYNC.warned=true;
+  showToast("Cloud sync unavailable. Working locally.");
+}
+
+function clean(o){return JSON.parse(JSON.stringify(o));}
+
+function stable(v){
+  if(Array.isArray(v)){return "["+v.map(stable).join(",")+"]";}
+  if(v&&typeof v==="object"){
+    return "{"+Object.keys(v).sort().map(k=>JSON.stringify(k)+":"+stable(v[k])).join(",")+"}";
+  }
+  return JSON.stringify(v===undefined?null:v);
+}
+
+function resetPersonal(){
+  const d=defaultState();
+  PERSONAL.forEach(k=>{state[k]=d[k];});
+}
+
+function applyPersonalFor(id){
+  const d=SYNC.cloudData[id];
+  const def=defaultState();
+  if(d){
+    PERSONAL.forEach(k=>{state[k]=(k in d)?d[k]:def[k];});
+  }else if(state.personalOwner&&state.personalOwner!==id){
+    resetPersonal();
+  }
+  state.personalOwner=id;
+}
+
+function personalData(){
+  const d={};
+  PERSONAL.forEach(k=>{d[k]=state[k]===undefined?null:state[k];});
+  d.feed=(d.feed||[]).slice(0,50);
+  d.inbox=(d.inbox||[]).slice(0,100);
+  return clean(d);
+}
+
+function userPayload(u){
+  const p=clean(u);
+  delete p.data;
+  if(state.account&&u.id===state.account.id){
+    p.data=personalData();
+  }
+  return p;
+}
+
+function isDirty(){
+  return state.users.some(u=>SYNC.synced["u:"+u.id]!==stable(userPayload(u)))||
+         state.crews.some(c=>SYNC.synced["c:"+c.id]!==stable(clean(c)));
+}
+
+function cloudPush(){
+  clearTimeout(SYNC.timer);
+  SYNC.timer=setTimeout(()=>{SYNC.timer=null;doPush();},600);
+}
+
+async function doPush(){
+  const c=cloud();
+  if(!c||!SYNC.ready){return;}
+  const myId=state.account&&state.account.id;
+  try{
+    for(const u of state.users){
+      const p=userPayload(u);
+      const j=stable(p);
+      const k="u:"+u.id;
+      if(SYNC.synced[k]!==j){
+        const ref=c.doc(c.db,"xeo_users",u.id);
+        if(u.id===myId){await c.setDoc(ref,p);}
+        else{await c.setDoc(ref,p,{merge:true});}
+        SYNC.synced[k]=j;
+      }
+    }
+    for(const cr of state.crews){
+      const p=clean(cr);
+      const j=stable(p);
+      const k="c:"+cr.id;
+      if(SYNC.synced[k]!==j){
+        await c.setDoc(c.doc(c.db,"xeo_crews",cr.id),p);
+        SYNC.synced[k]=j;
+      }
+    }
+    if(!isDirty()){
+      state.pending=false;
+      persist();
+    }
+  }catch(e){
+    console.warn("XEO sync push failed",e);
+    syncWarn();
+  }
+}
+
+async function cloudDelete(col,id){
+  const c=cloud();
+  if(!c){return;}
+  try{
+    await c.deleteDoc(c.doc(c.db,col,id));
+    delete SYNC.synced[(col==="xeo_users"?"u:":"c:")+id];
+  }catch(e){
+    console.warn("XEO sync delete failed",e);
+  }
+}
+
+function buildSynced(us,cs,myId){
+  const m={};
+  us.forEach(d=>{
+    const x=clean(d.data);
+    if(d.id!==myId){delete x.data;}
+    m["u:"+d.id]=stable(x);
+  });
+  cs.forEach(d=>{
+    m["c:"+d.id]=stable(Object.assign(clean(d.data),{id:d.id}));
+  });
+  return m;
+}
+
+function applyCloud(us,cs,initial){
+
+  const keep=initial&&state.pending;
+  const myId=state.account&&state.account.id;
+  const oldMine=state.account;
+  const oldUsers=state.users;
+  const oldCrews=state.crews;
+
+  const synced=buildSynced(us,cs,myId);
+
+  const users=us.map(d=>{
+    const x=Object.assign({},d.data);
+    SYNC.cloudData[d.id]=x.data||null;
+    delete x.data;
+    x.id=x.id||d.id;
+    return x;
+  });
+
+  if(keep){
+    oldUsers.forEach(u=>{
+      const i=users.findIndex(x=>x.id===u.id);
+      if(i<0){users.push(u);}
+    });
+    if(oldMine){
+      const i=users.findIndex(x=>x.id===oldMine.id);
+      if(i>=0){users[i]=oldMine;}
+    }
+  }
+
+  const crews=cs.map(d=>Object.assign({},d.data,{id:d.id}));
+
+  if(keep){
+    oldCrews.forEach(lc=>{
+      const i=crews.findIndex(c=>c.id===lc.id);
+      if(i>=0){crews[i]=lc;}else{crews.push(lc);}
+    });
+  }
+
+  state.users=users;
+  state.crews=crews;
+
+  if(myId){
+    const me=state.users.find(u=>u.id===myId);
+    if(!me&&!keep&&users.length){
+      state.account=null;
+      state.accountId=null;
+      persist();
+      location.reload();
+      return;
+    }
+    if(me){
+      state.account=me;
+      const d=SYNC.cloudData[myId];
+      if(d&&!keep){
+        PERSONAL.forEach(k=>{if(k in d){state[k]=d[k];}});
+        state.personalOwner=myId;
+      }
+    }
+  }
+
+  SYNC.synced=synced;
+  persist();
+
+  if(state.account&&$("app").style.display==="block"){
+    renderAll();
+  }
+}
+
+async function cloudPull(){
+  const c=cloud();
+  if(!c){syncWarn();return false;}
+  try{
+    const [a,b]=await Promise.all([
+      c.getDocs(c.collection(c.db,"xeo_users")),
+      c.getDocs(c.collection(c.db,"xeo_crews"))
+    ]);
+    applyCloud(
+      a.docs.map(d=>({id:d.id,data:d.data()})),
+      b.docs.map(d=>({id:d.id,data:d.data()})),
+      true
+    );
+    SYNC.ready=true;
+    startListeners();
+    cloudPush();
+    return true;
+  }catch(e){
+    console.warn("XEO sync pull failed",e);
+    syncWarn();
+    return false;
+  }
+}
+
+function startListeners(){
+
+  if(SYNC.listening){return;}
+
+  const c=cloud();
+  if(!c){return;}
+
+  SYNC.listening=true;
+
+  let lu=null,lc=null;
+
+  const handle=()=>{
+    if(!lu||!lc||SYNC.timer||isDirty()){return;}
+    const myId=state.account&&state.account.id;
+    const ns=buildSynced(lu,lc,myId);
+    if(stable(ns)===stable(SYNC.synced)){return;}
+    applyCloud(lu,lc,false);
+  };
+
+  c.onSnapshot(
+    c.collection(c.db,"xeo_users"),
+    s=>{
+      if(s.metadata.hasPendingWrites){return;}
+      lu=s.docs.map(d=>({id:d.id,data:d.data()}));
+      handle();
+    },
+    e=>console.warn("XEO users listener",e)
+  );
+
+  c.onSnapshot(
+    c.collection(c.db,"xeo_crews"),
+    s=>{
+      if(s.metadata.hasPendingWrites){return;}
+      lc=s.docs.map(d=>({id:d.id,data:d.data()}));
+      handle();
+    },
+    e=>console.warn("XEO crews listener",e)
+  );
+}
+
+window.addEventListener("online",()=>{
+  if(!SYNC.ready){
+    SYNC.promise=cloudPull();
+  }else{
+    cloudPush();
+  }
+});
+
+SYNC.promise=waitFirebase(6000).then(cloudPull);
+
+
 /* START XEO */
+
+if(state.device&&document.querySelector('.device[data-device="'+state.device+'"]')){
+  chooseDevice(state.device);
+  selectedDevice=state.device;
+}
 
 if(state.account){
   launchApp();
