@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>XEO — Real Life RPG</title>
+
+<!-- FIREBASE AUTO-CONNECTION -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-analytics.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCfVy9MSOgJNbnjJRASRCprf5PZ-StHMIA",
+    authDomain: "techthetic-97952.firebaseapp.com",
+    projectId: "techthetic-97952",
+    storageBucket: "techthetic-97952.firebasestorage.app",
+    messagingSenderId: "881879453249",
+    appId: "1:881879453249:web:d2857d92c75b7d35cec0c0",
+    measurementId: "G-0J0FJ6H3VC"
+  };
+
+  try {
+    const app = initializeApp(firebaseConfig);
+    let analytics = null;
+    try {
+      analytics = getAnalytics(app);
+    } catch (analyticsError) {
+      console.warn("XEO Firebase Analytics could not start in this environment.", analyticsError);
+    }
+    window.XEOFirebase = { app, analytics, config: firebaseConfig, connected: true };
+    window.dispatchEvent(new CustomEvent("xeo-firebase-ready"));
+    console.log("XEO Firebase connected successfully.");
+  } catch (firebaseError) {
+    console.error("XEO Firebase initialization failed.", firebaseError);
+    window.XEOFirebase = { app: null, analytics: null, config: firebaseConfig, connected: false, error: firebaseError };
+    window.dispatchEvent(new CustomEvent("xeo-firebase-error", { detail: firebaseError }));
+  }
+</script>
+
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;background:#fff;color:#0b0b0b}
+body{overflow-x:hidden}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+.hidden{display:none!important}
+:root{--black:#0b0b0b;--white:#fff;--gray:#666;--light:#f3f3f3;--shadow:5px 6px 0 #0b0b0b}
+.screen{min-height:100vh}
+.center{display:grid;place-items:center}
+.card{background:#fff;border:2px solid var(--black);border-radius:18px;box-shadow:var(--shadow)}
+.btn{border:2px solid var(--black);background:#fff;color:#0b0b0b;padding:11px 15px;border-radius:10px;font-weight:900;text-transform:uppercase;letter-spacing:.4px;box-shadow:3px 4px 0 #0b0b0b}
+.btn:hover{background:#0b0b0b;color:#fff}
+.btn:active{transform:translate(3px,4px);box-shadow:none}
+.btn.black{background:#0b0b0b;color:#fff}
+.btn.small{font-size:10px;padding:8px 10px}
+.btn.full{width:100%}
+.field{margin:14px 0}
+.field label{display:block;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px}
+.field input,.field textarea,.field select{width:100%;padding:12px 13px;border:2px solid #0b0b0b;border-radius:10px;background:#fff;color:#0b0b0b;outline:none}
+.field input:focus,.field textarea:focus,.field select:focus{outline:3px solid #ddd}
+.field textarea{min-height:90px;resize:vertical}
+.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.between{justify-content:space-between}
+
+/* ONBOARDING */
+#onboard{position:relative;min-height:100vh;display:grid;place-items:center;padding:18px;overflow:hidden;background:#fff}
+#onboard:before,#onboard:after{content:"";position:absolute;width:260px;height:180px;background:repeating-linear-gradient(135deg,#0b0b0b 0 7px,#fff 7px 25px);pointer-events:none}
+#onboard:before{top:-45px;right:-55px}
+#onboard:after{bottom:-45px;left:-55px}
+.onboard-card{width:min(520px,100%);padding:27px;position:relative;z-index:1}
+.brand{font:900 76px Arial Black,Arial,sans-serif;letter-spacing:6px;line-height:1}
+.brand small{display:block;font:900 11px Arial,sans-serif;letter-spacing:3px;margin-top:8px}
+.title{font:900 36px Arial Black,Arial,sans-serif;letter-spacing:1px;margin:6px 0 9px}
+.sub{color:#666;line-height:1.5}
+.device-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:20px 0}
+.device{min-height:110px;border:2px solid #0b0b0b;border-radius:14px;background:#fff;box-shadow:4px 4px 0 #0b0b0b;display:grid;place-items:center;padding:12px;text-align:center;color:#0b0b0b}
+.device.active{background:#0b0b0b;color:#fff;transform:translate(3px,3px);box-shadow:1px 1px 0 #0b0b0b}
+.device-mark{width:38px;height:38px;border:2px solid currentColor;border-radius:50%;display:grid;place-items:center;font-weight:900;margin:auto}
+.device b{display:block;margin-top:8px}
+.device small{display:block;margin-top:3px;opacity:.7}
+.code-dots{display:flex;justify-content:center;gap:11px;margin:17px 0}
+.dot{width:14px;height:14px;border:2px solid #0b0b0b;border-radius:50%;background:#fff}
+.dot.fill{background:#0b0b0b}
+.keypad{width:min(310px,100%);margin:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.key{aspect-ratio:1;border:2px solid #0b0b0b;border-radius:50%;background:#fff;color:#0b0b0b;font-size:22px;font-weight:900;box-shadow:4px 5px 0 #0b0b0b}
+.key:active{transform:translate(4px,5px);box-shadow:none}
+.key.zero{grid-column:2}
+.link{border:0;background:none;text-decoration:underline;font-weight:800;color:#444;padding:8px 0}
+
+/* APP */
+#app{display:none;min-height:100vh;background:#fff;position:relative;overflow:hidden}
+#app:before,#app:after{content:"";position:fixed;width:250px;height:160px;background:repeating-linear-gradient(135deg,#0b0b0b 0 7px,#fff 7px 25px);z-index:0;pointer-events:none}
+#app:before{top:0;right:0;clip-path:polygon(100% 0,100% 100%,0 0)}
+#app:after{bottom:0;left:0;clip-path:polygon(0 100%,100% 100%,0 0)}
+.shell{position:relative;z-index:1;min-height:100vh;display:grid;grid-template-columns:245px 1fr}
+.sidebar{position:sticky;top:0;height:100vh;background:#fff;border-right:2px solid #0b0b0b;padding:20px 13px;display:flex;flex-direction:column}
+.side-brand{font:900 50px Arial Black,Arial,sans-serif;letter-spacing:4px;margin:6px 10px 28px}
+.nav{display:grid;gap:7px}
+.nav button{border:2px solid transparent;background:transparent;color:#0b0b0b;border-radius:10px;text-align:left;padding:12px;font-weight:900}
+.nav button.active,.nav button:hover{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
+.side-bottom{margin-top:auto;padding:10px;border-top:1px solid #0b0b0b;color:#777;font-size:11px}
+.main{min-width:0;width:100%;max-width:1500px;margin:auto;padding:22px;overflow:hidden}
+.topbar{display:flex;align-items:center;gap:10px;justify-content:space-between;border-bottom:2px solid #0b0b0b;padding-bottom:13px;margin-bottom:15px}
+.logo-tap{border:0;background:none;font:900 29px Arial Black,Arial,sans-serif;letter-spacing:3px}
+.top-actions{display:flex;gap:7px}
+.iconbtn{width:42px;height:42px;border:2px solid #0b0b0b;border-radius:10px;background:#fff;box-shadow:3px 3px 0 #0b0b0b;font-weight:900;color:#0b0b0b}
+.page{display:none}
+.page.active{display:block}
+
+/* DASHBOARD */
+.hero{display:grid;grid-template-columns:1.35fr .65fr;gap:14px}
+.hero-main{border:2px solid #0b0b0b;border-radius:18px;box-shadow:var(--shadow);padding:23px;background:#fff;position:relative;overflow:hidden}
+.hero-main:after{content:"X";position:absolute;right:-30px;bottom:-75px;font:900 220px Arial Black,Arial,sans-serif;color:#f0f0f0}
+.hero-main>*{position:relative;z-index:1}
+.eyebrow{font-size:11px;font-weight:900;letter-spacing:2px}
+.hero-main h1{font:900 50px Arial Black,Arial,sans-serif;margin:8px 0;letter-spacing:1px}
+.hero-main p{color:#555;line-height:1.5}
+.level-card{padding:20px}
+.level{font:900 54px Arial Black,Arial,sans-serif}
+.xpbar{height:14px;border:2px solid #0b0b0b;border-radius:20px;overflow:hidden;background:#fff;margin:7px 0 13px}
+.xpfill{height:100%;width:0;background:#0b0b0b}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:15px 0}
+.stat{padding:14px;min-width:0}
+.stat .n{font:900 27px Arial Black,Arial,sans-serif;overflow-wrap:anywhere}
+.label{color:#777;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.5px}
+
+/* GRID / CARDS */
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}
+.col-12{grid-column:span 12}
+.col-8{grid-column:span 8}
+.col-7{grid-column:span 7}
+.col-6{grid-column:span 6}
+.col-5{grid-column:span 5}
+.col-4{grid-column:span 4}
+.section-card{padding:18px;min-width:0;background:#fff;border:2px solid #0b0b0b;border-radius:18px;box-shadow:var(--shadow)}
+.section-head{display:flex;gap:10px;justify-content:space-between;align-items:center;margin-bottom:13px;min-width:0}
+.section-head h2{margin:0;font:900 25px Arial Black,Arial,sans-serif;overflow-wrap:anywhere}
+.list{display:grid;gap:9px}
+.item{border:2px solid #0b0b0b;border-radius:12px;background:#fff;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:9px;min-width:0}
+.item.done{background:#0b0b0b;color:#fff}
+.item .left{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.item .left>div{min-width:0}
+.item b,.item small{overflow-wrap:anywhere}
+.item small{display:block;color:#777;margin-top:3px}
+.item.done small{color:#bbb}
+.emoji{width:34px;min-width:34px;height:34px;border:2px solid #0b0b0b;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:900;background:#fff;color:#0b0b0b}
+.complete{border:2px solid #0b0b0b;background:#fff;color:#0b0b0b;border-radius:9px;padding:7px 9px;font-size:10px;font-weight:900;text-transform:uppercase;flex-shrink:0}
+.complete:hover,.complete.done{background:#0b0b0b;color:#fff}
+
+/* MODES / EVENTS */
+.mode-grid,.event-grid,.crew-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.mode,.event{border:2px solid #0b0b0b;border-radius:12px;background:#fff;box-shadow:3px 3px 0 #0b0b0b;padding:14px}
+.mode.selected,.event.active{background:#0b0b0b;color:#fff}
+.mode h3,.event h3{margin:0 0 5px;font-size:16px}
+.mode p,.event p{margin:0;color:#666;font-size:12px;line-height:1.4}
+.mode.selected p,.event.active p{color:#ccc}
+.badge{display:inline-block;padding:4px 7px;border:2px solid #0b0b0b;border-radius:8px;font-size:9px;font-weight:900;background:#fff;color:#0b0b0b}
+.badge.black{background:#0b0b0b;color:#fff}
+
+/* RANK */
+.rank-box{display:flex;align-items:center;gap:14px}
+.rank-emblem{width:82px;height:82px;display:grid;place-items:center;flex-shrink:0}
+.rank-symbol{width:72px;height:72px;border:4px solid var(--rank-color,#0b0b0b);border-radius:50%;display:grid;place-items:center;position:relative;background:#fff;color:var(--rank-color,#0b0b0b);font:900 20px Arial Black,Arial,sans-serif;box-shadow:0 0 0 2px #0b0b0b,inset 0 0 0 5px #fff}
+.rank-symbol:after{content:"";position:absolute;width:14px;height:14px;border:3px solid var(--rank-color,#0b0b0b);transform:rotate(45deg)}
+.profile-rank-symbol{width:74px;height:55px;margin-top:4px}
+.profile-rank-symbol .rank-symbol{width:58px;height:58px;font-size:13px}
+
+/* SOCIAL / PROFILE */
+.searchbar{display:flex;gap:8px}
+.searchbar input{flex:1;min-width:0;border:2px solid #0b0b0b;border-radius:9px;padding:10px}
+.profile-head{display:flex;align-items:center;gap:16px}
+.avatar,.mini-avatar{background:#fff;color:#0b0b0b;border:2px solid #0b0b0b;box-shadow:3px 3px 0 #0b0b0b;display:grid;place-items:center;font-weight:900}
+.avatar{width:80px;height:80px;border-radius:20px;font-size:31px}
+.mini-avatar{width:38px;height:38px;min-width:38px;border-radius:11px}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.tag{border:2px solid #0b0b0b;border-radius:20px;padding:4px 8px;font-size:10px;background:#fff}
+.post{border:2px solid #0b0b0b;border-radius:14px;background:#fff;padding:14px}
+.post-head{display:flex;align-items:center;gap:9px}
+.post-head small{display:block;color:#777;margin-top:2px}
+.feed{display:grid;gap:10px}
+.rank-table{width:100%;border-collapse:collapse}
+.rank-table th,.rank-table td{padding:9px;text-align:left;border-bottom:2px solid #0b0b0b;font-size:12px}
+.rank-table tr.current{background:#0b0b0b;color:#fff}
+.notice{border:2px dashed #0b0b0b;border-radius:12px;padding:12px;background:#fff;font-size:12px;line-height:1.5}
+
+/* MODALS */
+.modal{position:fixed;inset:0;z-index:100;padding:12px;display:grid;place-items:center;background:rgba(255,255,255,.84);backdrop-filter:blur(5px)}
+.modal-box{width:min(620px,100%);max-height:92vh;overflow:auto;background:#fff;border:2px solid #0b0b0b;border-radius:18px;box-shadow:8px 9px 0 #0b0b0b;padding:20px}
+.close{float:right;width:36px;height:36px;border:2px solid #0b0b0b;border-radius:50%;background:#0b0b0b;color:#fff;font-size:18px}
+.toast{position:fixed;right:16px;bottom:16px;z-index:200;max-width:310px;padding:13px 16px;border:2px solid #fff;border-radius:12px;background:#0b0b0b;color:#fff;box-shadow:5px 5px 0 #fff;font-size:12px;font-weight:900}
+
+/* ONLINE / OFFLINE TAG */
+.net-tag{display:inline-flex;align-items:center;gap:9px;padding:8px 16px;border:3px solid #0b0b0b;border-radius:999px;background:#fff;color:#0b0b0b;font:900 14px Arial,Helvetica,sans-serif;box-shadow:4px 4px 0 #0b0b0b}
+.net-tag i{width:13px;height:13px;border-radius:50%;background:#22a84a;display:block}
+.net-tag.offline i{background:#e03131}
+.sidebar .net-tag{margin:0 10px 12px}
+.drawer-panel .net-tag{margin-top:18px}
+
+/* MOBILE */
+.mobile-nav{display:none}
+.mobile-drawer{display:none}
+@media(max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .sidebar{display:none}
+  .main{padding:13px 10px 92px}
+  .mobile-menu{display:block}
+  .hero{grid-template-columns:1fr}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .col-8,.col-7,.col-6,.col-5,.col-4{grid-column:span 12}
+  .mode-grid,.event-grid,.crew-grid{grid-template-columns:1fr}
+  .mobile-nav{position:fixed;left:5px;right:5px;bottom:5px;z-index:80;display:flex!important;gap:3px;padding:5px;background:#fff;border:2px solid #0b0b0b;border-radius:17px;box-shadow:4px 4px 0 #0b0b0b}
+  .mobile-nav button{flex:1;min-width:0;border:0;background:none;color:#0b0b0b;border-radius:9px;padding:8px 3px;font-size:9px;font-weight:900}
+  .mobile-nav button.active{background:#0b0b0b;color:#fff}
+  .mobile-drawer{position:fixed;inset:0;z-index:90;display:none}
+  .mobile-drawer.open{display:block}
+  .drawer-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.52)}
+  .drawer-panel{position:absolute;left:0;top:0;bottom:0;width:min(300px,88vw);background:#fff;border-right:2px solid #0b0b0b;box-shadow:7px 0 0 #0b0b0b;padding:18px;overflow:auto}
+  .drawer-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .drawer-head b{font:900 38px Arial Black,Arial,sans-serif;letter-spacing:3px}
+  .drawer-close{width:36px;height:36px;border:2px solid #0b0b0b;border-radius:50%;background:#0b0b0b;color:#fff}
+  .drawer-nav{display:grid;gap:8px}
+  .drawer-nav button{border:2px solid #0b0b0b;background:#fff;color:#0b0b0b;padding:12px;border-radius:10px;text-align:left;font-weight:900}
+}
+@media(max-width:560px){
+  #onboard{padding:10px}
+  .onboard-card{padding:20px}
+  .brand{font-size:55px}
+  .title{font-size:30px}
+  .device-grid{gap:8px}
+  .device{min-height:95px;padding:9px}
+  .keypad{max-width:280px;gap:8px}
+  .key{font-size:20px}
+  .stats{gap:8px}
+  .stat{padding:11px}
+  .stat .n{font-size:21px}
+  .level-card{padding:16px}
+  .level{font-size:44px}
+  .rank-emblem{width:68px;height:68px}
+  .rank-symbol{width:58px;height:58px}
+  .profile-head{align-items:flex-start}
+  .avatar{width:70px;height:70px}
+}
+@media(max-width:360px){
+  .brand{font-size:47px}
+  .hero-main h1{font-size:33px}
+  .section-head h2{font-size:21px}
+  .mobile-nav button{font-size:8px}
+}
+</style>
+</head>
+
+<body>
+
+<div id="onboard" class="screen">
+
+  <div class="onboard-card card" id="deviceScreen">
+    <div class="brand">XEO<small>REAL LIFE RPG</small></div>
+    <h1 class="title">CHOOSE DEVICE</h1>
+    <p class="sub">XEO will optimize the interface for your device.</p>
+    <div class="device-grid">
+      <button class="device" data-device="iOS"><div class="device-mark"></div><b>iOS</b><small>iPhone / iPad</small></button>
+      <button class="device" data-device="Android"><div class="device-mark">A</div><b>Android</b><small>Phone / Tablet</small></button>
+      <button class="device" data-device="PC"><div class="device-mark">PC</div><b>PC</b><small>Windows / Linux</small></button>
+      <button class="device" data-device="Tablet"><div class="device-mark">T</div><b>Tablet</b><small>Large touch screen</small></button>
+    </div>
+    <button class="btn black full" id="deviceContinue">CONTINUE</button>
+  </div>
+
+  <div class="onboard-card card hidden" id="accountScreen">
+    <div class="brand" style="font-size:52px">XEO</div>
+    <h1 class="title" id="authTitle">ACCESS XEO</h1>
+    <p class="sub" id="authSub">Enter your 6-digit access code.</p>
+    <div class="code-dots" id="codeDots"></div>
+    <div class="keypad">
+      <button class="key" data-key="1">1</button>
+      <button class="key" data-key="2">2</button>
+      <button class="key" data-key="3">3</button>
+      <button class="key" data-key="4">4</button>
+      <button class="key" data-key="5">5</button>
+      <button class="key" data-key="6">6</button>
+      <button class="key" data-key="7">7</button>
+      <button class="key" data-key="8">8</button>
+      <button class="key" data-key="9">9</button>
+      <button class="key" data-key="back">←</button>
+      <button class="key zero" data-key="0">0</button>
+      <button class="key" data-key="clear">C</button>
+    </div>
+    <div class="field hidden" id="createFields">
+      <label>Display name</label>
+      <input id="createName" maxlength="30" placeholder="Your name">
+      <label style="margin-top:10px">Username</label>
+      <input id="createUsername" maxlength="20" placeholder="@username">
+    </div>
+    <div class="row" style="justify-content:center;margin-top:15px">
+      <button class="link" id="switchAuth">Create a new account</button>
+    </div>
+  </div>
+
+</div>
+
+
+<div id="app">
+
+  <div class="shell">
+
+    <aside class="sidebar">
+      <div class="side-brand">XEO</div>
+      <nav class="nav">
+        <button data-page="home" class="active">Dashboard</button>
+        <button data-page="tracker">Tracker</button>
+        <button data-page="events">Events</button>
+        <button data-page="social">Social</button>
+        <button data-page="crew">Crew</button>
+        <button data-page="inbox">Inbox <span id="sideInboxBadge"></span></button>
+        <button data-page="profile">Account</button>
+      </nav>
+      <span class="net-tag" id="netTagSide"><i></i><span>Online</span></span>
+      <div class="side-bottom">
+        DEVICE: <b id="deviceLabel">—</b><br>
+        XEO REAL LIFE RPG
+      </div>
+    </aside>
+
+
+    <main class="main">
+
+      <div class="topbar">
+        <button class="iconbtn mobile-menu" onclick="toggleDrawer()">☰</button>
+        <button class="logo-tap" id="logoTap">XEO</button>
+        <div class="top-actions">
+          <button class="iconbtn" onclick="showPage('inbox')">✉</button>
+          <button class="iconbtn" onclick="showPage('profile')">◉</button>
+        </div>
+      </div>
+
+
+      <!-- HOME -->
+      <section class="page active" id="page-home">
+
+        <div class="hero">
+          <div class="hero-main">
+            <div class="eyebrow">WELCOME BACK, <span id="dashName">PLAYER</span></div>
+            <h1>BUILD YOUR REAL LIFE.</h1>
+            <p>Every productive action becomes XP. Level up yourself, not a fictional character.</p>
+            <div class="row">
+              <button class="btn black" onclick="showPage('tracker')">OPEN TRACKER</button>
+              <button class="btn" onclick="showPage('events')">VIEW EVENTS</button>
+            </div>
+          </div>
+
+          <div class="section-card card level-card">
+            <div class="label">CURRENT LEVEL</div>
+            <div class="level" id="dashLevel">1</div>
+            <div class="label">XP PROGRESS</div>
+            <div class="xpbar"><div class="xpfill" id="dashXPFill"></div></div>
+            <div class="rank-box">
+              <div class="rank-emblem" id="dashRankSymbol"></div>
+              <div>
+                <div class="label">RANK</div>
+                <b id="dashRank">IRON</b>
+                <div style="font-size:11px;color:#777;margin-top:4px" id="dashNextRank"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat card"><div class="label">XP</div><div class="n" id="statXP">0</div></div>
+          <div class="stat card"><div class="label">TODAY</div><div class="n" id="statToday">0</div></div>
+          <div class="stat card"><div class="label">STREAK</div><div class="n" id="statStreak">0</div></div>
+          <div class="stat card"><div class="label">TASKS</div><div class="n" id="statTasks">0</div></div>
+        </div>
+
+        <div class="grid">
+          <div class="col-8">
+            <div class="section-card card">
+              <div class="section-head">
+                <h2>TODAY'S ROUTINE</h2>
+                <button class="btn small" onclick="showAddTask()">+ TASK</button>
+              </div>
+              <div class="list" id="homeGoals"></div>
+            </div>
+          </div>
+
+          <div class="col-4">
+            <div class="section-card card">
+              <div class="section-head"><h2>ACTIVE ARC</h2></div>
+              <div id="activeArcBox"></div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="section-card card">
+              <div class="section-head">
+                <h2>PROGRESSION MODES</h2>
+                <button class="btn small" onclick="showPage('tracker')">OPEN</button>
+              </div>
+              <div class="mode-grid" id="homeModes"></div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+
+      <!-- TRACKER -->
+      <section class="page" id="page-tracker">
+
+        <div class="section-card card">
+          <div class="section-head">
+            <div>
+              <div class="label">DAILY TRACKER</div>
+              <h2 id="trackerDate">TODAY</h2>
+            </div>
+            <button class="btn small" onclick="showAddTask()">+ ADD TASK</button>
+          </div>
+          <div class="list" id="trackerGoals"></div>
+        </div>
+
+        <div class="section-card card" style="margin-top:15px">
+          <div class="section-head"><h2>ADD ROUTINE</h2></div>
+          <div class="notice">Custom task XP is limited to 50. XEO starts with an empty routine.</div>
+          <div class="row" style="margin-top:12px">
+            <button class="btn" onclick="showAddTask()">CREATE TASK</button>
+            <button class="btn" onclick="clearCompleted()">CLEAR COMPLETED</button>
+          </div>
+        </div>
+
+        <div class="section-card card" style="margin-top:15px">
+          <div class="section-head"><h2>MODES</h2></div>
+          <div class="mode-grid" id="trackerModes"></div>
+        </div>
+
+      </section>
+
+
+      <!-- EVENTS -->
+      <section class="page" id="page-events">
+
+        <div class="section-card card">
+          <div class="section-head">
+            <div>
+              <div class="label">SEASONAL ENGINE</div>
+              <h2>EVENTS</h2>
+            </div>
+            <span class="badge black" id="eventClock">LIVE</span>
+          </div>
+          <div class="event-grid" id="eventGrid"></div>
+        </div>
+
+        <div class="section-card card" style="margin-top:15px">
+          <div class="notice">XEO automatically determines the current seasonal arc from your device date.</div>
+        </div>
+
+      </section>
+
+
+      <!-- SOCIAL -->
+      <section class="page" id="page-social">
+
+        <div class="section-card card">
+          <div class="section-head">
+            <h2>FRIENDS</h2>
+            <button class="btn small" onclick="openModal('friendModal')">+ ADD</button>
+          </div>
+          <div class="searchbar">
+            <input id="friendSearch" placeholder="@username">
+            <button class="btn" onclick="searchFriends()">SEARCH</button>
+          </div>
+          <div class="list" id="friendResults" style="margin-top:12px"></div>
+        </div>
+
+        <div class="section-card card" style="margin-top:15px">
+          <div class="section-head"><h2>ACTIVITY FEED</h2></div>
+          <div class="feed" id="feed"></div>
+        </div>
+
+      </section>
+
+
+      <!-- CREW -->
+      <section class="page" id="page-crew">
+
+        <div class="section-card card">
+          <div class="section-head">
+            <div>
+              <div class="label">PRIVATE SOCIAL ROOM</div>
+              <h2>CREW</h2>
+            </div>
+            <button class="btn small" onclick="openModal('crewCreateModal')">CREATE</button>
+          </div>
+          <div class="row">
+            <input id="crewCodeInput" style="flex:1;min-width:0;border:2px solid #0b0b0b;border-radius:9px;padding:10px" placeholder="ENTER ROOM CODE">
+            <button class="btn" onclick="requestCrew()">JOIN</button>
+          </div>
+          <div id="crewArea" style="margin-top:13px"></div>
+        </div>
+
+      </section>
+
+
+      <!-- INBOX -->
+      <section class="page" id="page-inbox">
+
+        <div class="section-card card">
+          <div class="section-head">
+            <div>
+              <div class="label">NOTIFICATIONS</div>
+              <h2>INBOX <span id="inboxBadge"></span></h2>
+            </div>
+            <button class="btn small" onclick="clearInbox()">CLEAR</button>
+          </div>
+          <div class="list" id="inboxList"></div>
+        </div>
+
+      </section>
+
+
+      <!-- PROFILE -->
+      <section class="page" id="page-profile">
+
+        <div class="grid">
+
+          <div class="col-8">
+            <div class="section-card card">
+
+              <div class="profile-head">
+                <div class="avatar" id="profileAvatar">X</div>
+                <div>
+                  <h1 class="title" id="profileName">PLAYER</h1>
+                  <b id="profileUsername">@player</b>
+                  <div class="tags" id="profileTags"></div>
+                </div>
+              </div>
+
+              <hr style="border:0;border-top:2px solid #0b0b0b;margin:18px 0">
+
+              <div class="grid">
+                <div class="col-4">
+                  <div class="label">XP</div>
+                  <h2 id="profileXP">0</h2>
+                </div>
+                <div class="col-4">
+                  <div class="label">LEVEL</div>
+                  <h2 id="profileLevel">1</h2>
+                </div>
+                <div class="col-4">
+                  <div class="label">RANK</div>
+                  <div class="profile-rank-symbol" id="profileRankSymbol"></div>
+                  <b id="profileRank">IRON</b>
+                </div>
+              </div>
+
+              <div class="row" style="margin-top:15px">
+                <button class="btn" onclick="editProfile()">EDIT PROFILE</button>
+                <button class="btn" onclick="togglePrivacy()">ACTIVITY: <span id="privacyText">PUBLIC</span></button>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="col-4">
+            <div class="section-card card">
+              <div class="section-head"><h2>RANKS</h2></div>
+              <table class="rank-table"><tbody id="rankTable"></tbody></table>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <div class="footer-note">XEO • REAL LIFE RPG • PROTOTYPE</div>
+
+    </main>
+
+  </div>
+
+
+  <div class="mobile-nav" id="mobileNav">
+    <button data-page="home" class="active">HOME</button>
+    <button data-page="tracker">TRACK</button>
+    <button data-page="events">EVENTS</button>
+    <button data-page="social">SOCIAL</button>
+    <button onclick="toggleDrawer()">MORE</button>
+  </div>
+
+
+  <div class="mobile-drawer" id="mobileDrawer">
+    <div class="drawer-backdrop" onclick="closeDrawer()"></div>
+    <aside class="drawer-panel">
+      <div class="drawer-head">
+        <b>XEO</b>
+        <button class="drawer-close" onclick="closeDrawer()">×</button>
+      </div>
+      <div class="drawer-nav">
+        <button data-page="home">Dashboard</button>
+        <button data-page="tracker">Tracker</button>
+        <button data-page="events">Events</button>
+        <button data-page="social">Social</button>
+        <button data-page="crew">Crew</button>
+        <button data-page="inbox">Inbox <span id="drawerInboxBadge"></span></button>
+        <button data-page="profile">Account</button>
+      </div>
+      <span class="net-tag" id="netTagDrawer"><i></i><span>Online</span></span>
+    </aside>
+  </div>
+
+</div>
+
+
+<!-- ADD TASK MODAL -->
+<div class="modal hidden" id="taskModal">
+  <div class="modal-box">
+    <button class="close" onclick="closeModal('taskModal')">×</button>
+    <h2 class="title">NEW TASK</h2>
+    <p class="sub">Create a routine objective and assign up to 50 XP.</p>
+    <div class="field">
+      <label>Task name</label>
+      <input id="taskName" maxlength="40" placeholder="Example: 45 min exercise">
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <input id="taskDesc" maxlength="80" placeholder="Optional">
+    </div>
+    <div class="field">
+      <label>XP reward</label>
+      <input id="taskXP" type="number" min="1" max="50" value="10">
+    </div>
+    <button class="btn black full" onclick="createTask()">CREATE TASK</button>
+  </div>
+</div>
+
+
+<!-- FRIEND MODAL -->
+<div class="modal hidden" id="friendModal">
+  <div class="modal-box">
+    <button class="close" onclick="closeModal('friendModal')">×</button>
+    <h2 class="title">ADD FRIEND</h2>
+    <p class="sub">Enter an existing XEO username.</p>
+    <div class="field">
+      <label>Username</label>
+      <input id="friendUsername" placeholder="@username">
+    </div>
+    <button class="btn black full" onclick="addFriendByUsername()">SEND REQUEST</button>
+  </div>
+</div>
+
+
+<!-- CREW MODAL -->
+<div class="modal hidden" id="crewCreateModal">
+  <div class="modal-box">
+    <button class="close" onclick="closeModal('crewCreateModal')">×</button>
+    <h2 class="title">CREATE XEO CREW</h2>
+    <div class="field">
+      <label>Crew name</label>
+      <input id="crewName" maxlength="30" placeholder="Night Protocol">
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <textarea id="crewDesc" placeholder="What is your crew about?"></textarea>
+    </div>
+    <div class="field">
+      <label>Interests / tags</label>
+      <input id="crewTags" placeholder="Study, Fitness, Discipline">
+    </div>
+    <button class="btn black full" onclick="createCrew()">CREATE PRIVATE CREW</button>
+  </div>
+</div>
+
+
+<!-- ADMIN MODAL -->
+<div class="modal hidden" id="adminModal">
+  <div class="modal-box">
+    <button class="close" onclick="closeModal('adminModal')">×</button>
+    <h2 class="title">XEO ADMIN</h2>
+    <div class="notice">Prototype admin panel. Production security should use Firebase Authentication and Firestore Security Rules.</div>
+    <div class="stats">
+      <div class="stat card"><div class="label">USERS</div><div class="n" id="adminUsers">0</div></div>
+      <div class="stat card"><div class="label">CREWS</div><div class="n" id="adminCrews">0</div></div>
+      <div class="stat card"><div class="label">ALERTS</div><div class="n" id="adminAlerts">0</div></div>
+      <div class="stat card"><div class="label">DEVICE</div><div class="n" id="adminDevice">—</div></div>
+    </div>
+    <div class="field">
+      <label>Search account</label>
+      <input id="adminSearch" placeholder="@username">
+    </div>
+    <button class="btn black" onclick="adminSearchUser()">SEARCH</button>
+    <div class="list" id="adminResults" style="margin-top:12px"></div>
+    <hr style="border:0;border-top:2px solid #0b0b0b;margin:20px 0">
+    <button class="btn full" onclick="adminReset()">RESET LOCAL DATABASE</button>
+  </div>
+</div>
+
+
+<div class="toast hidden" id="toast"></div>
+
+
+<script>
+
+const STORAGE_KEY="XEO_STATE_V3";
+const ADMIN_CODE="drgstkahq2";
+
+const RANKS=[
+  {name:"IRON",min:0,icon:"I",color:"#777"},
+  {name:"BRONZE",min:500,icon:"B",color:"#b87333"},
+  {name:"GOLD",min:1200,icon:"G",color:"#d2a928"},
+  {name:"SILVER",min:2500,icon:"S",color:"#8f98a2"},
+  {name:"DIAMOND",min:5000,icon:"D",color:"#38bdf8"},
+  {name:"MASTER",min:9000,icon:"M",color:"#9855ff"},
+  {name:"GRANDMASTER",min:15000,icon:"GM",color:"#ff4d88"},
+  {name:"LEGEND",min:25000,icon:"L",color:"#ff7a00"}
+];
+
+const MODES=[
+  {id:"normal",name:"NORMAL MODE",desc:"Balanced XP. No modifier.",mult:1},
+  {id:"dopamine",name:"DOPAMINE DETOX",desc:"Focused offline progression.",mult:1.15},
+  {id:"ghost",name:"GHOST MODE",desc:"Low-noise, focused progression.",mult:1.2},
+  {id:"project50",name:"PROJECT 50",desc:"50-day consistency challenge.",mult:1.1},
+  {id:"club5",name:"5AM CLUB",desc:"Early-start objectives get bonus.",mult:1.12}
+];
+
+const ARCS=[
+  {name:"SPRING ARC",start:[3,1],end:[5,31],icon:"01"},
+  {name:"SUMMER ARC",start:[6,1],end:[8,31],icon:"02"},
+  {name:"AUTUMN ARC",start:[9,1],end:[11,30],icon:"03"},
+  {name:"WINTER ARC",start:[12,1],end:[12,31],icon:"04"}
+];
+
+let state=loadState();
+let selectedDevice="";
+let authMode="login";
+let codeInput="";
+let logoTaps=0;
+let logoTimer=null;
+
+
+function defaultState(){
+  return{
+    version:3,
+    device:"",
+    account:null,
+    accountId:null,
+    users:[],
+    friends:[],
+    requests:[],
+    inbox:[],
+    feed:[],
+    tasks:[],
+    completed:{},
+    mode:"normal",
+    privacy:"public",
+    crewId:null,
+    crews:[],
+    streak:0,
+    lastActiveDate:""
+  };
+}
+
+function loadState(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw){return defaultState();}
+    const s=JSON.parse(raw);
+    return Object.assign(defaultState(),s);
+  }catch(e){
+    return defaultState();
+  }
+}
+
+function save(){
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+}
+
+function $(id){
+  return document.getElementById(id);
+}
+
+function esc(v){
+  return String(v??"")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+function todayKey(){
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+function levelFromXP(xp){
+  return Math.floor((xp||0)/250)+1;
+}
+
+function getRank(xp){
+  let result=RANKS[0];
+  for(const r of RANKS){
+    if(xp>=r.min){result=r;}
+  }
+  return result;
+}
+
+function rankImage(rank,cls="rank-symbol"){
+  return `
+    <div class="${cls}" style="--rank-color:${rank.color}">
+      <span>${esc(rank.icon)}</span>
+    </div>
+  `;
+}
+
+function currentArc(){
+  const m=new Date().getMonth()+1;
+  if(m>=3&&m<=5){return ARCS[0];}
+  if(m>=6&&m<=8){return ARCS[1];}
+  if(m>=9&&m<=11){return ARCS[2];}
+  return ARCS[3];
+}
+
+function showToast(msg){
+  const el=$("toast");
+  el.textContent=msg;
+  el.classList.remove("hidden");
+  clearTimeout(showToast.timer);
+  showToast.timer=setTimeout(()=>{el.classList.add("hidden");},2200);
+}
+
+function openModal(id){
+  $(id).classList.remove("hidden");
+}
+
+function closeModal(id){
+  $(id).classList.add("hidden");
+}
+
+function chooseDevice(device){
+  selectedDevice=device;
+  document.querySelectorAll(".device").forEach(x=>{
+    x.classList.toggle("active",x.dataset.device===device);
+  });
+}
+
+document.querySelectorAll(".device").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    chooseDevice(btn.dataset.device);
+  });
+});
+
+$("deviceContinue").onclick=function(){
+  if(!selectedDevice){
+    showToast("Choose your device first.");
+    return;
+  }
+  state.device=selectedDevice;
+  save();
+  $("deviceScreen").classList.add("hidden");
+  $("accountScreen").classList.remove("hidden");
+  authMode=state.users.length?"login":"create";
+  codeInput="";
+  updateAuthUI();
+};
+
+function updateAuthUI(){
+  $("authTitle").textContent=authMode==="login"?"ACCESS XEO":"CREATE ACCOUNT";
+  $("authSub").textContent=authMode==="login"
+    ?"Enter your 6-digit access code."
+    :"Enter a 6-digit access code for your new account.";
+  $("createFields").classList.toggle("hidden",authMode!=="create");
+  $("switchAuth").textContent=authMode==="login"?"Create a new account":"Back to login";
+  renderDots();
+}
+
+$("switchAuth").onclick=function(){
+  authMode=authMode==="login"?"create":"login";
+  codeInput="";
+  updateAuthUI();
+};
+
+function renderDots(){
+  const el=$("codeDots");
+  el.innerHTML="";
+  for(let i=0;i<6;i++){
+    const d=document.createElement("div");
+    d.className="dot"+(i<codeInput.length?" fill":"");
+    el.appendChild(d);
+  }
+}
+
+document.querySelectorAll(".key").forEach(key=>{
+  key.addEventListener("click",()=>{
+    const val=key.dataset.key;
+    if(val==="back"){
+      codeInput=codeInput.slice(0,-1);
+    }else if(val==="clear"){
+      codeInput="";
+    }else if(/^\d$/.test(val)){
+      if(codeInput.length<6){codeInput+=val;}
+    }
+    renderDots();
+    if(codeInput.length===6){
+      setTimeout(processAuth,100);
+    }
+  });
+});
+
+function processAuth(){
+
+  if(authMode==="login"){
+    const account=state.users.find(u=>u.code===codeInput);
+    if(!account){
+      codeInput="";
+      renderDots();
+      showToast("Incorrect access code.");
+      return;
+    }
+    state.accountId=account.id;
+    state.account=account;
+    if(!state.device){
+      state.device=selectedDevice||"Android";
+    }
+    save();
+    launchApp();
+    return;
+  }
+
+  const name=$("createName").value.trim();
+  const username=$("createUsername").value.trim().replace(/^@/,"").toLowerCase();
+
+  if(!name||!username){
+    codeInput="";
+    renderDots();
+    showToast("Enter your name and username.");
+    return;
+  }
+
+  if(codeInput.length!==6){
+    showToast("Code must contain 6 digits.");
+    return;
+  }
+
+  if(state.users.some(u=>u.username===username)){
+    codeInput="";
+    renderDots();
+    showToast("Username already exists.");
+    return;
+  }
+
+  if(state.users.some(u=>u.code===codeInput)){
+    codeInput="";
+    renderDots();
+    showToast("That code is already in use.");
+    return;
+  }
+
+  const account={
+    id:crypto.randomUUID(),
+    name,
+    username,
+    code:codeInput,
+    xp:0,
+    interests:["Growth"],
+    created:Date.now(),
+    notifications:[]
+  };
+
+  state.users.push(account);
+  state.account=account;
+  state.accountId=account.id;
+  state.friends=[];
+  state.requests=[];
+  state.inbox=[{
+    id:Date.now(),
+    type:"system",
+    text:"Welcome to XEO. Your progression starts at 0 XP.",
+    time:Date.now()
+  }];
+
+  save();
+  launchApp();
+}
+
+function launchApp(){
+  $("onboard").style.display="none";
+  $("app").style.display="block";
+  $("deviceLabel").textContent=state.device||"—";
+  ensureDaily();
+  renderAll();
+}
+
+function logout(){
+  state.account=null;
+  state.accountId=null;
+  save();
+  location.reload();
+}
+
+function showPage(page){
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  const target=$("page-"+page);
+  if(target){target.classList.add("active");}
+  document.querySelectorAll("[data-page]").forEach(b=>{
+    b.classList.toggle("active",b.dataset.page===page);
+  });
+  closeDrawer();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+document.querySelectorAll("[data-page]").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    showPage(btn.dataset.page);
+  });
+});
+
+function toggleDrawer(){
+  $("mobileDrawer").classList.toggle("open");
+}
+
+function closeDrawer(){
+  $("mobileDrawer").classList.remove("open");
+}
+
+function ensureDaily(){
+  const key=todayKey();
+  if(state.lastActiveDate!==key){
+    state.completed={};
+    state.lastActiveDate=key;
+    save();
+  }
+}
+
+function getModeMultiplier(){
+  const mode=MODES.find(m=>m.id===state.mode);
+  return mode?mode.mult:1;
+}
+
+function taskReward(task){
+  let reward=Math.min(50,Math.max(1,Number(task.xp)||1));
+  reward*=getModeMultiplier();
+  if(state.mode==="club5"&&/5am|wake|morning|early/i.test(task.name)){
+    reward*=1.2;
+  }
+  return Math.round(reward);
+}
+
+function addXP(amount,task){
+
+  const reward=taskReward(task);
+  const before=getRank(state.account.xp||0);
+  const oldLevel=levelFromXP(state.account.xp||0);
+
+  state.account.xp=(state.account.xp||0)+reward;
+
+  const newLevel=levelFromXP(state.account.xp);
+  const after=getRank(state.account.xp);
+
+  state.feed.unshift({
+    user:state.account.name,
+    username:state.account.username,
+    text:`Completed ${task.name}`,
+    xp:reward,
+    time:Date.now()
+  });
+
+  if(after.name!==before.name){
+    state.inbox.unshift({
+      id:Date.now(),
+      type:"achievement",
+      text:`Rank up: ${after.name}`,
+      time:Date.now()
+    });
+  }
+
+  if(newLevel>oldLevel){
+    state.inbox.unshift({
+      id:Date.now()+1,
+      type:"achievement",
+      text:`Level ${newLevel} reached.`,
+      time:Date.now()
+    });
+  }
+
+  save();
+  renderAll();
+  showToast("+"+reward+" XP");
+}
+
+function toggleTask(taskId){
+
+  ensureDaily();
+
+  const task=state.tasks.find(t=>t.id===taskId);
+  if(!task){return;}
+
+  if(state.completed[taskId]){
+    delete state.completed[taskId];
+    save();
+    renderAll();
+    return;
+  }
+
+  state.completed[taskId]={
+    doneAt:Date.now(),
+    xp:taskReward(task)
+  };
+
+  addXP(0,task);
+}
+
+function createTask(){
+
+  const name=$("taskName").value.trim();
+  const desc=$("taskDesc").value.trim();
+  let xp=Number($("taskXP").value);
+
+  if(!name){
+    showToast("Task name is required.");
+    return;
+  }
+
+  if(!Number.isFinite(xp)){xp=10;}
+
+  xp=Math.max(1,Math.min(50,Math.round(xp)));
+
+  state.tasks.push({
+    id:crypto.randomUUID(),
+    name,
+    desc,
+    xp,
+    created:Date.now()
+  });
+
+  save();
+  closeModal("taskModal");
+
+  $("taskName").value="";
+  $("taskDesc").value="";
+  $("taskXP").value="10";
+
+  renderAll();
+  showToast("Task added.");
+}
+
+function removeTask(id){
+  state.tasks=state.tasks.filter(t=>t.id!==id);
+  delete state.completed[id];
+  save();
+  renderAll();
+}
+
+function clearCompleted(){
+  const completedIds=new Set(Object.keys(state.completed));
+  state.tasks=state.tasks.filter(t=>!completedIds.has(t.id));
+  state.completed={};
+  save();
+  renderAll();
+  showToast("Completed tasks cleared.");
+}
+
+function showAddTask(){
+  openModal("taskModal");
+}
+
+function renderGoals(containerId){
+
+  const el=$(containerId);
+  const tasks=state.tasks;
+
+  if(!tasks.length){
+    el.innerHTML=`
+      <div class="notice empty-routine">
+        <b>ROUTINE IS EMPTY.</b>
+        <small>Add your first task. XEO gives you a blank slate.</small>
+      </div>
+    `;
+    return;
+  }
+
+  el.innerHTML=tasks.map(task=>{
+
+    const done=!!state.completed[task.id];
+
+    return `
+      <div class="item ${done?"done":""}">
+        <div class="left">
+          <div class="emoji">${done?"✓":"X"}</div>
+          <div>
+            <b>${esc(task.name)}</b>
+            <small>${esc(task.desc||"Custom objective")} • +${taskReward(task)} XP</small>
+          </div>
+        </div>
+        <div class="row">
+          <button class="complete ${done?"done":""}" onclick="toggleTask('${task.id}')">
+            ${done?"DONE":"COMPLETE"}
+          </button>
+          <button class="btn small" onclick="removeTask('${task.id}')">REMOVE</button>
+        </div>
+      </div>
+    `;
+
+  }).join("");
+}
+
+function renderDashboard(){
+
+  if(!state.account){return;}
+
+  const xp=state.account.xp||0;
+  const level=levelFromXP(xp);
+  const rank=getRank(xp);
+  const next=RANKS[RANKS.indexOf(rank)+1];
+
+  $("dashName").textContent=(state.account.name||"PLAYER").toUpperCase();
+  $("dashLevel").textContent=level;
+  $("dashRank").textContent=rank.name;
+  $("dashRankSymbol").innerHTML=rankImage(rank);
+
+  let progress=0;
+
+  if(next){
+    progress=((xp-rank.min)/(next.min-rank.min))*100;
+  }else{
+    progress=100;
+  }
+
+  progress=Math.max(0,Math.min(100,progress));
+
+  $("dashXPFill").style.width=progress+"%";
+
+  $("dashNextRank").textContent=next
+    ?`${Math.max(0,next.min-xp)} XP to ${next.name}`
+    :"MAXIMUM RANK";
+
+  $("statXP").textContent=xp;
+  $("statToday").textContent=Object.keys(state.completed).length;
+  $("statTasks").textContent=state.tasks.length;
+  $("statStreak").textContent=state.streak||0;
+
+  const arc=currentArc();
+
+  $("activeArcBox").innerHTML=`
+    <div class="event active">
+      <div class="row between">
+        <span class="badge black">${arc.icon}</span>
+        <span class="badge">ACTIVE</span>
+      </div>
+      <h3 style="margin-top:14px">${arc.name}</h3>
+      <p>Seasonal progression event.</p>
+    </div>
+  `;
+}
+
+function renderModes(){
+
+  const html=MODES.map(m=>`
+    <button class="mode ${state.mode===m.id?"selected":""}" onclick="selectMode('${m.id}')">
+      <h3>${m.name}</h3>
+      <p>${m.desc}</p>
+      <div style="margin-top:8px;font-size:10px;font-weight:900">XP × ${m.mult}</div>
+    </button>
+  `).join("");
+
+  $("homeModes").innerHTML=html;
+  $("trackerModes").innerHTML=html;
+}
+
+function selectMode(id){
+  state.mode=id;
+  save();
+  renderAll();
+  showToast("Mode changed.");
+}
+
+function renderEvents(){
+
+  const active=currentArc();
+
+  $("eventGrid").innerHTML=ARCS.map(a=>{
+
+    const isActive=a.name===active.name;
+
+    return `
+      <div class="event ${isActive?"active":""}">
+        <div class="row between">
+          <span class="event-index">${a.icon}</span>
+          <span class="badge">${isActive?"ACTIVE":"SEASON"}</span>
+        </div>
+        <h3 style="margin-top:13px">${a.name}</h3>
+        <p>${isActive?"Current seasonal arc.":"Upcoming / previous seasonal arc."}</p>
+      </div>
+    `;
+
+  }).join("");
+}
+
+function searchFriends(){
+
+  const q=$("friendSearch").value.trim().replace(/^@/,"").toLowerCase();
+
+  const results=state.users.filter(u=>{
+    if(!state.account||u.id===state.account.id){return false;}
+    if(!q){return true;}
+    return u.username.includes(q)||u.name.toLowerCase().includes(q);
+  }).slice(0,10);
+
+  $("friendResults").innerHTML=results
+    .map(u=>userCard(u,state.friends.includes(u.id)))
+    .join("")
+    ||`<div class="notice">No matching XEO account found.</div>`;
+}
+
+function userCard(u,isFriend){
+
+  return `
+    <div class="item">
+      <div class="left">
+        <div class="mini-avatar">${esc((u.name||"X")[0])}</div>
+        <div>
+          <b>${esc(u.name)}</b>
+          <small>@${esc(u.username)} • LV ${levelFromXP(u.xp||0)} • ${getRank(u.xp||0).name}</small>
+        </div>
+      </div>
+      ${
+        isFriend
+        ?`<button class="btn small" onclick="removeFriend('${u.id}')">REMOVE</button>`
+        :`<button class="btn small" onclick="sendFriendRequest('${u.id}')">ADD</button>`
+      }
+    </div>
+  `;
+}
+
+function sendFriendRequest(id){
+
+  const user=state.users.find(u=>u.id===id);
+
+  if(!user){return;}
+
+  if(state.friends.includes(id)){
+    showToast("Already friends.");
+    return;
+  }
+
+  if(!state.requests.some(r=>r.from===state.account.id&&r.to===id)){
+
+    state.requests.push({
+      from:state.account.id,
+      to:id,
+      time:Date.now()
+    });
+
+    user.notifications=user.notifications||[];
+
+    user.notifications.push({
+      text:`${state.account.name} sent you a friend request.`,
+      time:Date.now()
+    });
+
+    save();
+  }
+
+  showToast("Friend request sent.");
+}
+
+function addFriendByUsername(){
+
+  const username=$("friendUsername").value.trim().replace(/^@/,"").toLowerCase();
+
+  const user=state.users.find(u=>u.username===username);
+
+  if(!user){
+    showToast("User not found.");
+    return;
+  }
+
+  sendFriendRequest(user.id);
+
+  $("friendUsername").value="";
+
+  closeModal("friendModal");
+}
+
+function removeFriend(id){
+  state.friends=state.friends.filter(x=>x!==id);
+  save();
+  renderAll();
+  showToast("Friend removed.");
+}
+
+function renderSocial(){
+
+  $("friendResults").innerHTML=state.friends.map(id=>{
+    const u=state.users.find(x=>x.id===id);
+    return u?userCard(u,true):"";
+  }).join("")
+  ||`<div class="notice">No friends yet. Search for a username.</div>`;
+
+  let feed=state.feed||[];
+
+  if(!feed.length){
+    feed=[{
+      user:"XEO",
+      username:"system",
+      text:"Your activity feed will appear here.",
+      xp:0,
+      time:Date.now()
+    }];
+  }
+
+  $("feed").innerHTML=feed.slice(0,12).map(p=>`
+    <div class="post">
+      <div class="post-head">
+        <div class="mini-avatar">${esc((p.user||"X")[0])}</div>
+        <div>
+          <b>${esc(p.user)}</b>
+          <small>@${esc(p.username)} • ${timeAgo(p.time)}</small>
+        </div>
+      </div>
+      <p>✓ ${esc(p.text)}</p>
+      ${p.xp?`<span class="badge black">+${p.xp} XP</span>`:""}
+    </div>
+  `).join("");
+}
+
+function createCrew(){
+
+  const name=$("crewName").value.trim();
+  const desc=$("crewDesc").value.trim();
+  const tags=$("crewTags").value.split(",").map(x=>x.trim()).filter(Boolean);
+
+  if(!name){
+    showToast("Crew name is required.");
+    return;
+  }
+
+  const crew={
+    id:crypto.randomUUID(),
+    name,
+    desc,
+    tags,
+    code:Math.random().toString(36).slice(2,8).toUpperCase(),
+    owner:state.account.id,
+    members:[state.account.id],
+    requests:[],
+    created:Date.now()
+  };
+
+  state.crews.push(crew);
+  state.crewId=crew.id;
+
+  save();
+
+  $("crewName").value="";
+  $("crewDesc").value="";
+  $("crewTags").value="";
+
+  closeModal("crewCreateModal");
+
+  renderAll();
+  showToast("Crew created. Room code: "+crew.code);
+}
+
+function requestCrew(){
+
+  const code=$("crewCodeInput").value.trim().toUpperCase();
+
+  const crew=state.crews.find(c=>c.code===code);
+
+  if(!crew){
+    showToast("Crew room not found.");
+    return;
+  }
+
+  if(crew.members.includes(state.account.id)){
+    showToast("You are already a member.");
+    return;
+  }
+
+  if(!crew.requests.includes(state.account.id)){
+    crew.requests.push(state.account.id);
+  }
+
+  const owner=state.users.find(u=>u.id===crew.owner);
+
+  if(owner){
+    owner.notifications=owner.notifications||[];
+    owner.notifications.push({
+      text:`${state.account.name} requested to join ${crew.name}.`,
+      time:Date.now()
+    });
+  }
+
+  save();
+  showToast("Join request sent.");
+}
+
+function acceptCrew(userId){
+
+  const crew=state.crews.find(c=>c.id===state.crewId);
+
+  if(!crew||crew.owner!==state.account.id){return;}
+
+  if(crew.members.includes(userId)){return;}
+
+  crew.requests=crew.requests.filter(x=>x!==userId);
+  crew.members.push(userId);
+
+  const user=state.users.find(u=>u.id===userId);
+
+  if(user){
+    user.notifications=user.notifications||[];
+    user.notifications.push({
+      text:`Your request to join ${crew.name} was accepted.`,
+      time:Date.now()
+    });
+  }
+
+  save();
+  renderAll();
+  showToast("Member accepted.");
+}
+
+function declineCrew(userId){
+
+  const crew=state.crews.find(c=>c.id===state.crewId);
+
+  if(!crew||crew.owner!==state.account.id){return;}
+
+  crew.requests=crew.requests.filter(x=>x!==userId);
+
+  save();
+  renderAll();
+  showToast("Request declined.");
+}
+
+function renderCrew(){
+
+  const el=$("crewArea");
+
+  const crew=state.crews.find(c=>c.id===state.crewId);
+
+  if(!crew){
+    el.innerHTML=`
+      <div class="notice">
+        You are not currently in a crew.<br>
+        Create one or enter a private room code.
+      </div>
+    `;
+    return;
+  }
+
+  const owner=crew.owner===state.account.id;
+
+  el.innerHTML=`
+
+    <div class="hero-main">
+      <div class="eyebrow">PRIVATE PROGRESSION ROOM</div>
+      <h1 style="font-size:39px">${esc(crew.name)}</h1>
+      <p>${esc(crew.desc||"No description.")}</p>
+      <div class="tags">
+        ${(crew.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join("")}
+      </div>
+      <div style="margin-top:13px;font-weight:900">
+        ${crew.members.length} MEMBER${crew.members.length===1?"":"S"}
+        ${owner?`<span style="margin-left:12px">ROOM CODE: ${esc(crew.code)}</span>`:""}
+      </div>
+    </div>
+
+    <div class="list" style="margin-top:12px">
+      ${crew.members.map(id=>{
+        const u=state.users.find(x=>x.id===id);
+        return u?userCard(u,true):"";
+      }).join("")}
+    </div>
+
+    ${
+      owner&&crew.requests.length
+      ?`
+        <div class="section-card card" style="margin-top:12px;padding:13px">
+          <div class="section-head"><h2>JOIN REQUESTS</h2></div>
+          <div class="list">
+            ${crew.requests.map(id=>{
+              const u=state.users.find(x=>x.id===id);
+              if(!u){return "";}
+              return `
+                <div class="item">
+                  <div>
+                    <b>${esc(u.name)}</b>
+                    <small>@${esc(u.username)}</small>
+                  </div>
+                  <div class="row">
+                    <button class="btn small" onclick="acceptCrew('${u.id}')">ACCEPT</button>
+                    <button class="btn small" onclick="declineCrew('${u.id}')">DECLINE</button>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `
+      :""
+    }
+
+  `;
+}
+
+function renderInbox(){
+
+  const arr=state.inbox||[];
+
+  const badge=arr.length?`(${arr.length})`:"";
+
+  $("inboxBadge").textContent=badge;
+  $("sideInboxBadge").textContent=badge;
+  $("drawerInboxBadge").textContent=badge;
+
+  $("inboxList").innerHTML=arr.map(n=>`
+    <div class="item">
+      <div class="left">
+        <div class="emoji">
+          ${n.type==="achievement"?"A":n.type==="friend"?"F":"!"}
+        </div>
+        <div>
+          <b>${esc(n.text)}</b>
+          <small>${timeAgo(n.time)}</small>
+        </div>
+      </div>
+    </div>
+  `).join("")
+  ||`<div class="notice">Inbox is clear.</div>`;
+}
+
+function clearInbox(){
+  state.inbox=[];
+  save();
+  renderInbox();
+  showToast("Inbox cleared.");
+}
+
+function renderProfile(){
+
+  const u=state.account;
+
+  if(!u){return;}
+
+  $("profileAvatar").textContent=(u.name||"X")[0];
+  $("profileName").textContent=u.name||"PLAYER";
+  $("profileUsername").textContent="@"+u.username;
+  $("profileXP").textContent=u.xp||0;
+  $("profileLevel").textContent=levelFromXP(u.xp||0);
+
+  const rank=getRank(u.xp||0);
+
+  $("profileRank").textContent=rank.name;
+  $("profileRankSymbol").innerHTML=rankImage(rank);
+
+  $("profileTags").innerHTML=(u.interests||[])
+    .map(t=>`<span class="tag">${esc(t)}</span>`)
+    .join("");
+
+  $("privacyText").textContent=state.privacy.toUpperCase();
+
+  $("rankTable").innerHTML=RANKS.map(r=>`
+    <tr class="${r.name===rank.name?"current":""}">
+      <td>${r.name}</td>
+      <td>${r.min} XP</td>
+    </tr>
+  `).join("");
+}
+
+function editProfile(){
+
+  const name=prompt("Display name:",state.account.name);
+
+  if(name===null){return;}
+
+  const interests=prompt(
+    "Interests, separated by commas:",
+    (state.account.interests||[]).join(", ")
+  );
+
+  state.account.name=name.trim()||state.account.name;
+
+  state.account.interests=(interests||"")
+    .split(",")
+    .map(x=>x.trim())
+    .filter(Boolean);
+
+  save();
+  renderAll();
+  showToast("Profile updated.");
+}
+
+function togglePrivacy(){
+  state.privacy=state.privacy==="public"?"private":"public";
+  save();
+  renderProfile();
+  showToast("Activity privacy: "+state.privacy.toUpperCase());
+}
+
+function timeAgo(t){
+
+  const s=Math.max(1,Math.floor((Date.now()-Number(t||Date.now()))/1000));
+
+  if(s<60){return "just now";}
+  if(s<3600){return Math.floor(s/60)+"m ago";}
+  if(s<86400){return Math.floor(s/3600)+"h ago";}
+
+  return Math.floor(s/86400)+"d ago";
+}
+
+function renderAll(){
+
+  if(!state.account){return;}
+
+  ensureDaily();
+  renderDashboard();
+  renderGoals("homeGoals");
+  renderGoals("trackerGoals");
+  renderModes();
+  renderEvents();
+  renderSocial();
+  renderCrew();
+  renderInbox();
+  renderProfile();
+
+  $("trackerDate").textContent=new Date().toLocaleDateString(undefined,{
+    weekday:"long",
+    month:"short",
+    day:"numeric"
+  });
+
+  $("eventClock").textContent=new Date().toLocaleString();
+}
+
+setInterval(()=>{
+  const e=$("eventClock");
+  if(e){
+    e.textContent=new Date().toLocaleString();
+  }
+},10000);
+
+
+/* SECRET ADMIN */
+
+$("logoTap").addEventListener("click",()=>{
+
+  logoTaps++;
+
+  clearTimeout(logoTimer);
+
+  logoTimer=setTimeout(()=>{logoTaps=0;},3500);
+
+  if(logoTaps>=22){
+
+    logoTaps=0;
+
+    const input=prompt("ENTER ADMIN CODE");
+
+    if(input===ADMIN_CODE){
+      openAdmin();
+    }else{
+      showToast("Access denied.");
+    }
+  }
+});
+
+function openAdmin(){
+
+  $("adminUsers").textContent=state.users.length;
+  $("adminCrews").textContent=state.crews.length;
+  $("adminAlerts").textContent=state.inbox.length;
+  $("adminDevice").textContent=state.device||"—";
+  $("adminSearch").value="";
+  $("adminResults").innerHTML="";
+
+  openModal("adminModal");
+}
+
+function adminSearchUser(){
+
+  const q=$("adminSearch").value.trim().replace(/^@/,"").toLowerCase();
+
+  const result=state.users.filter(u=>
+    u.username.includes(q)||u.name.toLowerCase().includes(q)
+  );
+
+  $("adminResults").innerHTML=result.map(u=>`
+    <div class="item">
+      <div>
+        <b>${esc(u.name)}</b>
+        <small>@${esc(u.username)} • ${u.xp||0} XP</small>
+      </div>
+      <div class="row">
+        <button class="btn small" onclick="adminRestrict('${u.id}')">
+          ${u.restricted?"UNRESTRICT":"RESTRICT"}
+        </button>
+        <button class="btn small" onclick="adminDelete('${u.id}')">DELETE</button>
+      </div>
+    </div>
+  `).join("")
+  ||`<div class="notice">No account found.</div>`;
+}
+
+function adminRestrict(id){
+
+  const u=state.users.find(x=>x.id===id);
+
+  if(!u){return;}
+
+  u.restricted=!u.restricted;
+
+  save();
+  adminSearchUser();
+
+  showToast(u.restricted?"Account restricted.":"Restriction removed.");
+}
+
+function adminDelete(id){
+
+  if(id===state.account.id){
+    showToast("You cannot delete the active account.");
+    return;
+  }
+
+  if(!confirm("Delete this account permanently?")){
+    return;
+  }
+
+  state.users=state.users.filter(u=>u.id!==id);
+  state.friends=state.friends.filter(x=>x!==id);
+
+  state.crews.forEach(c=>{
+    c.members=c.members.filter(x=>x!==id);
+    c.requests=c.requests.filter(x=>x!==id);
+  });
+
+  save();
+  adminSearchUser();
+
+  $("adminUsers").textContent=state.users.length;
+  $("adminCrews").textContent=state.crews.length;
+
+  showToast("Account deleted.");
+}
+
+function adminReset(){
+
+  if(!confirm("RESET ALL LOCAL XEO DATA?")){
+    return;
+  }
+
+  localStorage.removeItem(STORAGE_KEY);
+
+  location.reload();
+}
+
+
+/* FIREBASE READY / ERROR HOOKS */
+
+window.addEventListener("xeo-firebase-ready",()=>{
+  console.log("XEO: Firebase is ready.");
+});
+
+window.addEventListener("xeo-firebase-error",()=>{
+  console.warn("XEO: Firebase unavailable; local XEO mode remains active.");
+});
+
+
+/* ONLINE / OFFLINE TAG */
+
+function updateNetTag(){
+  const on=navigator.onLine;
+  ["netTagSide","netTagDrawer"].forEach(id=>{
+    const el=$(id);
+    if(!el)return;
+    el.classList.toggle("offline",!on);
+    el.lastElementChild.textContent=on?"Online":"Offline";
+  });
+}
+window.addEventListener("online",updateNetTag);
+window.addEventListener("offline",updateNetTag);
+updateNetTag();
+
+
+/* START XEO */
+
+if(state.account){
+  launchApp();
+}
+
+</script>
+
+</body>
+</html>
