@@ -43,7 +43,11 @@
 </script>
 
 <style>
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+.keypad,.key,.code-dots,.dot,.device,.btn,.close{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.key:focus,.btn:focus,.device:focus{outline:none}
+input::selection{background:#d9d9d9;color:#0b0b0b}
+input:-webkit-autofill,input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 1000px #fff inset;-webkit-text-fill-color:#0b0b0b}
 html,body{margin:0;padding:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;background:#fff;color:#0b0b0b}
 body{overflow-x:hidden}
 button,input,textarea,select{font:inherit}
@@ -1275,7 +1279,6 @@ function renderGoals(containerId){
     return `
       <div class="item ${done?"done":""}">
         <div class="left">
-          <div class="emoji">${done?"✓":"X"}</div>
           <div>
             <b>${esc(task.name)}</b>
             <small>${esc(task.desc||"Custom objective")} • +${taskReward(task)} XP</small>
