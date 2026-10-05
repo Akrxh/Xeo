@@ -2575,12 +2575,19 @@ function renderAll(){
   $("eventClock").textContent=new Date().toLocaleString();
 }
 
-setInterval(()=>{
+function tickClock(){
   const e=$("eventClock");
-  if(e){
-    e.textContent=new Date().toLocaleString();
-  }
-},10000);
+  if(e){e.textContent=new Date().toLocaleString();}
+}
+
+(function clockLoop(){
+  tickClock();
+  setTimeout(clockLoop,1000-(Date.now()%1000)+5);
+})();
+
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden){tickClock();}
+});
 
 
 /* SECRET ADMIN */
