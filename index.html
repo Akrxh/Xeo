@@ -7,7 +7,7 @@
 <title>XEO — Real Life RPG</title>
 
 <!-- FIREBASE AUTO-CONNECTION -->
-<script type="module">
+<script type="module" onerror="window.XEOFirebase={connected:false};window.dispatchEvent(new CustomEvent('xeo-firebase-error'))">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-analytics.js";
   import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
@@ -262,6 +262,19 @@ button{cursor:pointer}
   .section-head h2{font-size:21px}
   .mobile-nav button{font-size:8px}
 }
+@media(max-width:900px){
+  .profile-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .profile-stats>.col-4{grid-column:span 1;min-width:0}
+  .profile-stats h2{margin:4px 0 0;font-size:24px;overflow-wrap:anywhere}
+  .profile-stats b{display:block;font-size:12px;overflow-wrap:anywhere}
+  .profile-stats .profile-rank-symbol{width:58px;height:50px;margin-top:2px}
+  .profile-stats .profile-rank-symbol .rank-symbol{width:46px;height:46px;font-size:11px}
+}
+.mode-tags{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:9px}
+.mode.locked{opacity:.55}
+button.item{width:100%;text-align:left;color:#0b0b0b}
+button.item:disabled{opacity:.5;cursor:default}
+.tags:empty{display:none}
 </style>
 </head>
 
@@ -484,6 +497,7 @@ button{cursor:pointer}
             <input id="friendSearch" placeholder="@username">
             <button class="btn" onclick="searchFriends()">SEARCH</button>
           </div>
+          <div id="friendRequests"></div>
           <div class="list" id="friendResults" style="margin-top:12px"></div>
         </div>
 
@@ -547,12 +561,13 @@ button{cursor:pointer}
                   <h1 class="title" id="profileName">PLAYER</h1>
                   <b id="profileUsername">@player</b>
                   <div class="tags" id="profileTags"></div>
+                  <div class="tags" id="profileBadges"></div>
                 </div>
               </div>
 
               <hr style="border:0;border-top:2px solid #0b0b0b;margin:18px 0">
 
-              <div class="grid">
+              <div class="grid profile-stats">
                 <div class="col-4">
                   <div class="label">XP</div>
                   <h2 id="profileXP">0</h2>
@@ -566,11 +581,16 @@ button{cursor:pointer}
                   <div class="profile-rank-symbol" id="profileRankSymbol"></div>
                   <b id="profileRank">IRON</b>
                 </div>
+                <div class="col-4 hidden" id="profileStreakBox">
+                  <div class="label">STREAK</div>
+                  <h2 id="profileStreak">0</h2>
+                </div>
               </div>
 
               <div class="row" style="margin-top:15px">
                 <button class="btn" onclick="editProfile()">EDIT PROFILE</button>
                 <button class="btn" onclick="togglePrivacy()">ACTIVITY: <span id="privacyText">PUBLIC</span></button>
+                <button class="btn" onclick="openBadges()">TAGS</button>
                 <button class="btn black" onclick="logout()">LOGOUT</button>
               </div>
 
@@ -713,6 +733,66 @@ button{cursor:pointer}
 </div>
 
 
+<!-- CLAN MANAGE MODAL -->
+<div class="modal hidden" id="crewManageModal">
+  <div class="modal-box">
+    <button class="close" onclick="closeModal('crewManageModal')">×</button>
+    <h2 class="title">MANAGE CLAN</h2>
+    <div class="field">
+      <label>Clan name</label>
+      <input id="cmName" maxlength="30">
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <textarea id="cmDesc"></textarea>
+    </div>
+    <div class="field">
+      <label>Interests / tags</label>
+      <input id="cmTags" placeholder="Study, Fitness, Discipline">
+    </div>
+    <div class="field">
+      <label>Clan level</label>
+      <select id="cmLevel">
+        <option value="1">LEVEL 1 • XP × 1.0</option>
+        <option value="2">LEVEL 2 • XP × 1.1</option>
+        <option value="3">LEVEL 3 • XP × 1.2</option>
+        <option value="4">LEVEL 4 • XP × 1.3</option>
+        <option value="5">LEVEL 5 • XP × 1.4</option>
+      </select>
+    </div>
+    <button class="btn black full" onclick="saveCrewEdit()">SAVE CHANGES</button>
+    <hr style="border:0;border-top:2px solid #0b0b0b;margin:20px 0">
+    <div class="field">
+      <label>Add member</label>
+      <div class="searchbar">
+        <input id="cmAdd" placeholder="@username">
+        <button class="btn" onclick="addCrewMember()">ADD</button>
+      </div>
+    </div>
+    <div class="list" id="cmMembers"></div>
+    <hr style="border:0;border-top:2px solid #0b0b0b;margin:20px 0">
+    <button class="btn full" onclick="deleteCrew()">DELETE CLAN</button>
+  </div>
+</div>
+
+<!-- ACHIEVEMENT TAGS MODAL -->
+<div class="modal hidden" id="badgeModal">
+  <div class="modal-box">
+    <button class="close" onclick="closeModal('badgeModal')">×</button>
+    <h2 class="title">ACHIEVEMENT TAGS</h2>
+    <p class="sub" id="badgeSub"></p>
+    <div class="list" id="badgeList" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- FRIEND PROGRESS MODAL -->
+<div class="modal hidden" id="friendViewModal">
+  <div class="modal-box">
+    <button class="close" onclick="closeModal('friendViewModal')">×</button>
+    <div id="friendViewBody"></div>
+  </div>
+</div>
+
 <!-- IN-APP DIALOG -->
 <div class="modal hidden" id="dialogModal">
   <div class="modal-box" style="width:min(420px,100%)">
@@ -790,7 +870,17 @@ function defaultState(){
     streak:0,
     lastActiveDate:"",
     personalOwner:null,
-    pending:false
+    pending:false,
+    modeSince:null,
+    lastStreakDate:"",
+    badges:[],
+    totalDone:0,
+    bestStreak:0,
+    bestDay:0,
+    tasksCreated:0,
+    modesUsed:[],
+    profileEdited:false,
+    clanClaimed:[]
   };
 }
 
@@ -813,10 +903,26 @@ function persist(){
   localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
 }
 
+function syncPublic(){
+  const a=state.account;
+  if(!a){return;}
+  a.streak=state.streak||0;
+  a.lastStreakDate=state.lastStreakDate||"";
+  a.mode=state.mode;
+  a.badges=(state.badges||[]).slice(0,5);
+  a.bestStreak=state.bestStreak||0;
+}
+
 function save(){
   state.pending=true;
+  syncPublic();
   persist();
   cloudPush();
+}
+
+function uid(){
+  if(window.crypto&&typeof crypto.randomUUID==="function"){return crypto.randomUUID();}
+  return "id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,6);
 }
 
 function $(id){
@@ -940,7 +1046,7 @@ $("deviceContinue").onclick=async function(){
   persist();
   if(!SYNC.ready){
     showToast("Connecting to XEO cloud...");
-    await Promise.race([SYNC.promise,new Promise(r=>setTimeout(r,6000))]);
+    await Promise.race([SYNC.promise,new Promise(r=>setTimeout(r,4500))]);
   }
   $("deviceScreen").classList.add("hidden");
   $("accountScreen").classList.remove("hidden");
@@ -1043,7 +1149,7 @@ function processAuth(){
   }
 
   const account={
-    id:crypto.randomUUID(),
+    id:uid(),
     name,
     username,
     code:codeInput,
@@ -1147,6 +1253,10 @@ function addXP(amount,task){
 
   state.account.xp=(state.account.xp||0)+reward;
 
+  state.totalDone=(state.totalDone||0)+1;
+  updateStreak();
+  state.bestDay=Math.max(state.bestDay||0,Object.keys(state.completed).length);
+
   const newLevel=levelFromXP(state.account.xp);
   const after=getRank(state.account.xp);
 
@@ -1219,13 +1329,14 @@ function createTask(){
   xp=Math.max(1,Math.min(50,Math.round(xp)));
 
   state.tasks.push({
-    id:crypto.randomUUID(),
+    id:uid(),
     name,
     desc,
     xp,
     created:Date.now()
   });
 
+  state.tasksCreated=(state.tasksCreated||0)+1;
   save();
   closeModal("taskModal");
 
@@ -1237,8 +1348,15 @@ function createTask(){
   showToast("Task added.");
 }
 
-function removeTask(id){
-  state.tasks=state.tasks.filter(t=>t.id!==id);
+async function removeTask(id){
+  const t=state.tasks.find(x=>x.id===id);
+  const ok=await askConfirm(
+    "REMOVE TASK",
+    'Are you sure you want to remove "'+(t?t.name:"this task")+'"?',
+    "REMOVE"
+  );
+  if(!ok){return;}
+  state.tasks=state.tasks.filter(x=>x.id!==id);
   delete state.completed[id];
   save();
   renderAll();
@@ -1329,7 +1447,7 @@ function renderDashboard(){
   $("statXP").textContent=xp;
   $("statToday").textContent=Object.keys(state.completed).length;
   $("statTasks").textContent=state.tasks.length;
-  $("statStreak").textContent=state.streak||0;
+  $("statStreak").textContent=streakOf(state);
 
   const arc=currentArc();
 
@@ -1345,22 +1463,77 @@ function renderDashboard(){
   `;
 }
 
+function lockLeftDays(){
+  if(!state.modeSince){return 0;}
+  const left=state.modeSince+25*86400000-Date.now();
+  return left>0?Math.ceil(left/86400000):0;
+}
+
 function renderModes(){
 
-  const html=MODES.map(m=>`
-    <button class="mode ${state.mode===m.id?"selected":""}" onclick="selectMode('${m.id}')">
-      <h3>${m.name}</h3>
-      <p>${m.desc}</p>
-      <div style="margin-top:8px;font-size:10px;font-weight:900">XP × ${m.mult}</div>
-    </button>
-  `).join("");
+  const left=lockLeftDays();
+  const st=streakOf(state);
+
+  const html=MODES.map(m=>{
+
+    const sel=state.mode===m.id;
+    const tags=[];
+
+    if(sel&&m.id!=="normal"){
+      tags.push("STREAK "+st+" DAY"+(st===1?"":"S"));
+    }
+
+    if(sel&&left>0){
+      tags.push("CHANGE IN "+left+"D");
+    }
+
+    return `
+      <button class="mode ${sel?"selected":""} ${(!sel&&left>0)?"locked":""}" onclick="selectMode('${m.id}')">
+        ${tags.length?`<div class="mode-tags">${tags.map(t=>`<span class="badge">${t}</span>`).join("")}</div>`:""}
+        <h3>${m.name}</h3>
+        <p>${m.desc}</p>
+        <div style="margin-top:8px;font-size:10px;font-weight:900">XP × ${m.mult}</div>
+      </button>
+    `;
+
+  }).join("");
 
   $("homeModes").innerHTML=html;
   $("trackerModes").innerHTML=html;
 }
 
-function selectMode(id){
+async function selectMode(id){
+
+  if(id===state.mode){return;}
+
+  const left=lockLeftDays();
+
+  if(left>0){
+    showToast("Mode locked. "+left+" day"+(left===1?"":"s")+" left.");
+    return;
+  }
+
+  const m=MODES.find(x=>x.id===id);
+  if(!m){return;}
+
+  const ok=await askConfirm(
+    "CHANGE MODE",
+    "Switch to "+m.name+"? You will not be able to change mode again for 25 days.",
+    "SWITCH"
+  );
+
+  if(!ok){return;}
+
   state.mode=id;
+  state.modeSince=Date.now();
+  state.streak=0;
+  state.lastStreakDate="";
+  state.modesUsed=state.modesUsed||[];
+
+  if(id!=="normal"&&!state.modesUsed.includes(id)){
+    state.modesUsed.push(id);
+  }
+
   save();
   renderAll();
   showToast("Mode changed.");
@@ -1399,12 +1572,32 @@ function searchFriends(){
   }).slice(0,10);
 
   $("friendResults").innerHTML=results
-    .map(u=>userCard(u,state.friends.includes(u.id)))
+    .map(u=>userCard(u))
     .join("")
     ||`<div class="notice">No matching XEO account found.</div>`;
 }
 
-function userCard(u,isFriend){
+function userCard(u,mode){
+
+  const me=state.account||{};
+  const isFriend=(me.friends||[]).includes(u.id);
+
+  let action="";
+
+  if(mode==="crew"){
+    action=isFriend?`<button class="btn small" onclick="viewFriend('${u.id}')">VIEW</button>`:"";
+  }else if(isFriend){
+    action=`<div class="row">
+      <button class="btn small" onclick="viewFriend('${u.id}')">VIEW</button>
+      <button class="btn small" onclick="removeFriend('${u.id}')">REMOVE</button>
+    </div>`;
+  }else if((me.friendReqs||[]).includes(u.id)){
+    action=`<button class="btn small" onclick="acceptFriend('${u.id}')">ACCEPT</button>`;
+  }else if((u.friendReqs||[]).includes(me.id)){
+    action=`<button class="btn small" disabled style="opacity:.5">SENT</button>`;
+  }else{
+    action=`<button class="btn small" onclick="sendFriendRequest('${u.id}')">ADD</button>`;
+  }
 
   return `
     <div class="item">
@@ -1412,48 +1605,89 @@ function userCard(u,isFriend){
         <div class="mini-avatar">${esc((u.name||"X")[0])}</div>
         <div>
           <b>${esc(u.name)}</b>
-          <small>@${esc(u.username)} • LV ${levelFromXP(u.xp||0)} • ${getRank(u.xp||0).name}</small>
+          <small>@${esc(u.username)} • LV ${levelFromXP(u.xp||0)} • ${getRank(u.xp||0).name}${isFriend?" • STREAK "+streakOf(u):""}</small>
         </div>
       </div>
-      ${
-        isFriend
-        ?`<button class="btn small" onclick="removeFriend('${u.id}')">REMOVE</button>`
-        :`<button class="btn small" onclick="sendFriendRequest('${u.id}')">ADD</button>`
-      }
+      ${action}
     </div>
   `;
 }
 
+function pushNote(u,text){
+  u.notifications=u.notifications||[];
+  u.notifications.unshift({text,time:Date.now()});
+  u.notifications=u.notifications.slice(0,30);
+}
+
 function sendFriendRequest(id){
 
+  const me=state.account;
   const user=state.users.find(u=>u.id===id);
 
-  if(!user){return;}
+  if(!me||!user||user.id===me.id){return;}
 
-  if(state.friends.includes(id)){
+  me.friends=me.friends||[];
+  me.friendReqs=me.friendReqs||[];
+  user.friends=user.friends||[];
+  user.friendReqs=user.friendReqs||[];
+
+  if(me.friends.includes(id)){
     showToast("Already friends.");
     return;
   }
 
-  if(!state.requests.some(r=>r.from===state.account.id&&r.to===id)){
-
-    state.requests.push({
-      from:state.account.id,
-      to:id,
-      time:Date.now()
-    });
-
-    user.notifications=user.notifications||[];
-
-    user.notifications.push({
-      text:`${state.account.name} sent you a friend request.`,
-      time:Date.now()
-    });
-
-    save();
+  if(me.friendReqs.includes(id)){
+    acceptFriend(id);
+    return;
   }
 
+  if(user.friendReqs.includes(me.id)){
+    showToast("Request already sent.");
+    return;
+  }
+
+  user.friendReqs.push(me.id);
+  pushNote(user,me.name+" sent you a friend request.");
+
+  save();
+  renderSocial();
   showToast("Friend request sent.");
+}
+
+function acceptFriend(id){
+
+  const me=state.account;
+  const user=state.users.find(u=>u.id===id);
+
+  if(!me||!user){return;}
+
+  me.friends=me.friends||[];
+  user.friends=user.friends||[];
+
+  me.friendReqs=(me.friendReqs||[]).filter(x=>x!==id);
+  user.friendReqs=(user.friendReqs||[]).filter(x=>x!==me.id);
+
+  if(!me.friends.includes(id)){me.friends.push(id);}
+  if(!user.friends.includes(me.id)){user.friends.push(me.id);}
+
+  pushNote(user,me.name+" accepted your friend request.");
+
+  save();
+  renderAll();
+  showToast("Friend added.");
+}
+
+function declineFriend(id){
+
+  const me=state.account;
+
+  if(!me){return;}
+
+  me.friendReqs=(me.friendReqs||[]).filter(x=>x!==id);
+
+  save();
+  renderAll();
+  showToast("Request declined.");
 }
 
 function addFriendByUsername(){
@@ -1474,18 +1708,105 @@ function addFriendByUsername(){
   closeModal("friendModal");
 }
 
-function removeFriend(id){
-  state.friends=state.friends.filter(x=>x!==id);
+async function removeFriend(id){
+
+  const me=state.account;
+  const user=state.users.find(u=>u.id===id);
+
+  if(!me){return;}
+
+  const ok=await askConfirm(
+    "REMOVE FRIEND",
+    "Remove "+(user?user.name:"this friend")+" from your friends?",
+    "REMOVE"
+  );
+
+  if(!ok){return;}
+
+  me.friends=(me.friends||[]).filter(x=>x!==id);
+
+  if(user){
+    user.friends=(user.friends||[]).filter(x=>x!==me.id);
+  }
+
   save();
   renderAll();
   showToast("Friend removed.");
 }
 
+function viewFriend(id){
+
+  const me=state.account;
+  const u=state.users.find(x=>x.id===id);
+
+  if(!me||!u||!(me.friends||[]).includes(id)){
+    showToast("Only friends can view progress.");
+    return;
+  }
+
+  const xp=u.xp||0;
+  const rank=getRank(xp);
+  const mode=MODES.find(m=>m.id===u.mode)||MODES[0];
+
+  const tags=(u.badges||[]).map(bid=>{
+    const a=ACH.find(x=>x.id===bid);
+    return a?`<span class="badge black">${esc(a.name)}</span>`:"";
+  }).join("");
+
+  $("friendViewBody").innerHTML=`
+    <h2 class="title" style="font-size:28px">${esc(u.name)}</h2>
+    <b>@${esc(u.username)}</b>
+
+    <div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-top:16px">
+      <div class="stat card"><div class="label">LEVEL</div><div class="n">${levelFromXP(xp)}</div></div>
+      <div class="stat card"><div class="label">RANK</div><div class="n">${rank.name}</div></div>
+      <div class="stat card"><div class="label">STREAK</div><div class="n">${streakOf(u)}</div></div>
+      <div class="stat card"><div class="label">XP</div><div class="n">${xp}</div></div>
+    </div>
+
+    <div class="label">MODE</div>
+    <b>${mode.name}</b>
+
+    <div class="tags" style="margin-top:12px">${tags}</div>
+  `;
+
+  openModal("friendViewModal");
+}
+
 function renderSocial(){
 
-  $("friendResults").innerHTML=state.friends.map(id=>{
+  const me=state.account;
+
+  if(!me){return;}
+
+  const reqs=(me.friendReqs||[])
+    .map(id=>state.users.find(x=>x.id===id))
+    .filter(Boolean);
+
+  $("friendRequests").innerHTML=reqs.length
+    ?`<div class="label" style="margin:14px 0 8px">FRIEND REQUESTS (${reqs.length})</div>
+      <div class="list">
+        ${reqs.map(u=>`
+          <div class="item">
+            <div class="left">
+              <div class="mini-avatar">${esc((u.name||"X")[0])}</div>
+              <div>
+                <b>${esc(u.name)}</b>
+                <small>@${esc(u.username)}</small>
+              </div>
+            </div>
+            <div class="row">
+              <button class="btn small" onclick="acceptFriend('${u.id}')">ACCEPT</button>
+              <button class="btn small" onclick="declineFriend('${u.id}')">DECLINE</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>`
+    :"";
+
+  $("friendResults").innerHTML=(me.friends||[]).map(id=>{
     const u=state.users.find(x=>x.id===id);
-    return u?userCard(u,true):"";
+    return u?userCard(u):"";
   }).join("")
   ||`<div class="notice">No friends yet. Search for a username.</div>`;
 
@@ -1527,11 +1848,17 @@ function createCrew(){
     return;
   }
 
+  if(myCrew()){
+    showToast("Leave your current clan first.");
+    return;
+  }
+
   const crew={
-    id:crypto.randomUUID(),
+    id:uid(),
     name,
     desc,
     tags,
+    level:1,
     code:Math.random().toString(36).slice(2,8).toUpperCase(),
     owner:state.account.id,
     members:[state.account.id],
@@ -1570,6 +1897,11 @@ function requestCrew(){
     return;
   }
 
+  if(myCrew()){
+    showToast("Leave your current clan first.");
+    return;
+  }
+
   if(!crew.requests.includes(state.account.id)){
     crew.requests.push(state.account.id);
   }
@@ -1590,7 +1922,7 @@ function requestCrew(){
 
 function acceptCrew(userId){
 
-  const crew=state.crews.find(c=>c.id===state.crewId);
+  const crew=myCrew();
 
   if(!crew||crew.owner!==state.account.id){return;}
 
@@ -1616,7 +1948,7 @@ function acceptCrew(userId){
 
 function declineCrew(userId){
 
-  const crew=state.crews.find(c=>c.id===state.crewId);
+  const crew=myCrew();
 
   if(!crew||crew.owner!==state.account.id){return;}
 
@@ -1627,11 +1959,187 @@ function declineCrew(userId){
   showToast("Request declined.");
 }
 
+function myCrew(){
+  const me=state.account;
+  if(!me){return null;}
+  return state.crews.find(c=>(c.members||[]).includes(me.id))||null;
+}
+
+/* CLAN EVENTS */
+
+const CLAN_TASKS=[
+"Walk 5,000 steps","Do 20 push-ups","Hold a 1 minute plank","Stretch for 10 minutes","Jog or run for 15 minutes","Do 30 squats","Climb stairs for 5 minutes","Cycle for 20 minutes","Do a 10 minute home workout","Skip rope for 5 minutes",
+"Study for 45 minutes","Read 20 pages of a book","Learn 10 new words","Watch an educational video","Revise yesterday's notes","Solve 5 practice problems","Write a one page summary","Practice a language for 15 minutes","Teach a concept to someone","Finish one assignment",
+"Do a 25 minute focus session","Plan tomorrow before bed","Clear your inbox","Finish your most important task first","Work 1 hour without your phone","Declutter your desk","Write a to-do list","Complete a 2 hour deep work block","Review your weekly goals","Finish one overdue task",
+"Drink 2 litres of water","Sleep before 11 PM","Wake up before 7 AM","Eat a healthy breakfast","Skip sugary drinks for a day","Eat 3 servings of vegetables","Take a 10 minute walk after a meal","Get 8 hours of sleep","Cook a meal at home","Avoid junk food for a day",
+"Meditate for 10 minutes","Write a gratitude list","Journal for 10 minutes","Take 10 deep breaths","Spend 30 minutes offline","Avoid social media for 3 hours","Sit in silence for 5 minutes","Write down three wins","Listen to calm music for 15 minutes","Do a digital detox evening",
+"Message a friend you miss","Compliment a crew member","Help someone with a task","Call a family member","Share a tip with your crew","Thank someone sincerely","Plan a group activity","Give feedback to a teammate","Introduce yourself to someone new","Check in on a friend",
+"Practice a skill for 30 minutes","Draw or sketch something","Write 300 words","Learn a new recipe","Practice an instrument for 20 minutes","Organise your photos","Build a small project","Watch a tutorial and apply it","Brainstorm 10 ideas","Learn a new keyboard shortcut set",
+"Track today's spending","Review your budget","Cancel an unused subscription","Save a small amount","Tidy your room","Do the laundry","Organise your files","Clean one area at home","Prepare tomorrow's bag","Plan meals for the week",
+"Take a cold shower","No phone for the first hour of the day","Do something that scares you","Go outside for 30 minutes","Make your bed first thing","Finish a task you have been avoiding","Do a random act of kindness","Complete a 24 hour no-sugar challenge","Try something new today","Walk without headphones",
+"Stick to your routine all day","Do your hardest task before noon","Say no to one distraction","Review your progress in XEO","Set a goal for next week","Reflect on what you learned today","Fix one small problem you ignored","Do 5 minutes of a habit you skipped","Finish all tasks in your XEO routine","Go to bed without scrolling"
+];
+
+const CLAN_TIERS={
+  BASE:{max:300,label:"BASE"},
+  GOOD:{max:425,label:"+50% TEAMWORK"},
+  FULL:{max:500,label:"DOUBLE XP"}
+};
+
+function fmtDate(d){
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+function weekKey(off){
+  const d=new Date();
+  const day=(d.getDay()+6)%7;
+  d.setDate(d.getDate()-day+(off||0)*7);
+  return fmtDate(d);
+}
+
+function hashStr(str){
+  let h=2166136261;
+  for(let i=0;i<str.length;i++){
+    h^=str.charCodeAt(i);
+    h=Math.imul(h,16777619);
+  }
+  return h>>>0;
+}
+
+function rng(seed){
+  return function(){
+    seed|=0;
+    seed=seed+0x6D2B79F5|0;
+    let t=Math.imul(seed^seed>>>15,1|seed);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return((t^t>>>14)>>>0)/4294967296;
+  };
+}
+
+function weeklyTasks(crewId,week){
+  const r=rng(hashStr(crewId+"|"+week));
+  const idx=CLAN_TASKS.map((_,i)=>i);
+  for(let i=idx.length-1;i>0;i--){
+    const j=Math.floor(r()*(i+1));
+    const tmp=idx[i];
+    idx[i]=idx[j];
+    idx[j]=tmp;
+  }
+  return idx.slice(0,5);
+}
+
+function clanDone(u,week){
+  return ((u&&u.clanWeeks)||{})[week]||[];
+}
+
+function teamStats(crew,week){
+  const members=(crew.members||[]).map(id=>state.users.find(x=>x.id===id)).filter(Boolean);
+  const n=members.length;
+  const hard=members.filter(u=>clanDone(u,week).length>=1).length;
+  let tier="BASE";
+  if(n>=3){
+    if(hard===n){tier="FULL";}
+    else if(hard>=Math.ceil(n*0.6)){tier="GOOD";}
+  }
+  return {members,n,hard,tier};
+}
+
+function clanMult(crew){
+  return 1+0.1*((crew.level||1)-1);
+}
+
+function clanPayout(crew,week,u){
+  const t=teamStats(crew,week);
+  const d=clanDone(u,week).length;
+  if(!d){return {xp:0,tier:t.tier,d,t};}
+  const xp=Math.round(CLAN_TIERS[t.tier].max*(d/5)*clanMult(crew));
+  return {xp,tier:t.tier,d,t};
+}
+
+function toggleClanTask(idx){
+  const crew=myCrew();
+  const me=state.account;
+  if(!crew||!me){return;}
+  const wk=weekKey(0);
+  me.clanWeeks=me.clanWeeks||{};
+  const arr=(me.clanWeeks[wk]||[]).slice();
+  const i=arr.indexOf(idx);
+  if(i>=0){arr.splice(i,1);}else{arr.push(idx);}
+  me.clanWeeks[wk]=arr;
+  Object.keys(me.clanWeeks).sort().slice(0,-6).forEach(k=>{delete me.clanWeeks[k];});
+  save();
+  renderCrew();
+}
+
+function grantXP(amount,text){
+
+  const me=state.account;
+  const before=getRank(me.xp||0);
+  const oldLevel=levelFromXP(me.xp||0);
+
+  me.xp=(me.xp||0)+amount;
+
+  const newLevel=levelFromXP(me.xp);
+  const after=getRank(me.xp);
+
+  state.feed.unshift({
+    user:me.name,
+    username:me.username,
+    text,
+    xp:amount,
+    time:Date.now()
+  });
+
+  if(after.name!==before.name){
+    state.inbox.unshift({id:Date.now(),type:"achievement",text:`Rank up: ${after.name}`,time:Date.now()});
+  }
+
+  if(newLevel>oldLevel){
+    state.inbox.unshift({id:Date.now()+1,type:"achievement",text:`Level ${newLevel} reached.`,time:Date.now()});
+  }
+
+  save();
+  renderAll();
+  showToast("+"+amount+" XP");
+}
+
+function claimClan(week){
+
+  const crew=myCrew();
+  const me=state.account;
+
+  if(!crew||!me){return;}
+
+  if(week>=weekKey(0)){
+    showToast("That week is still running.");
+    return;
+  }
+
+  state.clanClaimed=state.clanClaimed||[];
+
+  const key=crew.id+"|"+week;
+
+  if(state.clanClaimed.includes(key)){
+    showToast("Already claimed.");
+    return;
+  }
+
+  const r=clanPayout(crew,week,me);
+
+  if(!r.xp){
+    showToast("No clan tasks completed that week.");
+    return;
+  }
+
+  state.clanClaimed.push(key);
+  grantXP(r.xp,"Claimed clan reward");
+}
+
 function renderCrew(){
 
   const el=$("crewArea");
 
-  const crew=state.crews.find(c=>c.id===state.crewId);
+  const crew=myCrew();
 
   if(!crew){
     el.innerHTML=`
@@ -1643,7 +2151,22 @@ function renderCrew(){
     return;
   }
 
-  const owner=crew.owner===state.account.id;
+  const me=state.account;
+  const owner=crew.owner===me.id;
+  const lvl=crew.level||1;
+  const wk=weekKey(0);
+  const st=teamStats(crew,wk);
+  const mine=clanDone(me,wk);
+  const tasks=weeklyTasks(crew.id,wk);
+  const proj=clanPayout(crew,wk,me);
+
+  const claims=[];
+  for(let off=-1;off>=-4;off--){
+    const w=weekKey(off);
+    const claimed=(state.clanClaimed||[]).includes(crew.id+"|"+w);
+    const r=clanPayout(crew,w,me);
+    if(!claimed&&r.d>0){claims.push({w,r});}
+  }
 
   el.innerHTML=`
 
@@ -1658,12 +2181,101 @@ function renderCrew(){
         ${crew.members.length} MEMBER${crew.members.length===1?"":"S"}
         ${owner?`<span style="margin-left:12px">ROOM CODE: ${esc(crew.code)}</span>`:""}
       </div>
+      <div class="row" style="margin-top:14px">
+        <span class="badge black">CLAN LEVEL ${lvl}</span>
+        <span class="badge">XP × ${clanMult(crew).toFixed(1)}</span>
+        ${owner
+          ?`<button class="btn small" onclick="openCrewManage()">MANAGE CLAN</button>`
+          :`<button class="btn small" onclick="leaveCrew()">LEAVE CLAN</button>`}
+      </div>
+    </div>
+
+    <div class="section-card card" style="margin-top:12px">
+      <div class="section-head">
+        <div>
+          <div class="label">WEEKLY CLAN EVENT</div>
+          <h2>THIS WEEK</h2>
+        </div>
+        <span class="badge black">${wk}</span>
+      </div>
+
+      <div class="row" style="margin-bottom:12px">
+        <span class="badge black">TEAMWORK: ${CLAN_TIERS[st.tier].label}</span>
+        <span class="badge">PARTICIPATING ${st.hard}/${st.n}</span>
+        <span class="badge">YOU ${mine.length}/5</span>
+      </div>
+
+      <div class="list">
+        ${tasks.map(idx=>{
+          const done=mine.includes(idx);
+          const count=st.members.filter(u=>clanDone(u,wk).includes(idx)).length;
+          return `
+            <div class="item ${done?"done":""}">
+              <div class="left">
+                <div>
+                  <b>${esc(CLAN_TASKS[idx])}</b>
+                  <small>${count}/${st.n} members done</small>
+                </div>
+              </div>
+              <button class="complete ${done?"done":""}" onclick="toggleClanTask(${idx})">
+                ${done?"DONE":"COMPLETE"}
+              </button>
+            </div>
+          `;
+        }).join("")}
+      </div>
+
+      <div class="notice" style="margin-top:12px">
+        <b>YOUR XP THIS WEEK: ${proj.xp}</b><br>
+        A member participates by completing at least 1 clan task. Base reward is 300 XP (250 + 50 clan bonus).
+        With 3+ members, if the participation ratio reaches 3:5 (60% of the crew) everyone gets +50%.
+        If every member participates the reward doubles (500 XP max).
+        Your XP scales with the tasks you finish and your clan level. Rewards are claimed after the week ends.
+      </div>
+    </div>
+
+    <div class="section-card card" style="margin-top:12px">
+      <div class="section-head"><h2>TEAM PROGRESS</h2></div>
+      <div class="list">
+        ${st.members.map(u=>{
+          const d=clanDone(u,wk).length;
+          return `
+            <div class="item">
+              <div class="left">
+                <div class="mini-avatar">${esc((u.name||"X")[0])}</div>
+                <div>
+                  <b>${esc(u.name)}</b>
+                  <small>@${esc(u.username)}${u.id===crew.owner?" • ADMIN":""}</small>
+                </div>
+              </div>
+              <span class="badge ${d>=1?"black":""}">${d}/5${d>=1?" ACTIVE":""}</span>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </div>
+
+    <div class="section-card card" style="margin-top:12px">
+      <div class="section-head"><h2>CLAIM REWARDS</h2></div>
+      <div class="list">
+        ${claims.length?claims.map(c=>`
+          <div class="item">
+            <div class="left">
+              <div>
+                <b>Week of ${c.w}</b>
+                <small>${CLAN_TIERS[c.r.tier].label} • ${c.r.d}/5 tasks</small>
+              </div>
+            </div>
+            <button class="btn small" onclick="claimClan('${c.w}')">CLAIM +${c.r.xp} XP</button>
+          </div>
+        `).join(""):`<div class="notice">No rewards to claim. Finish clan tasks this week and claim next week.</div>`}
+      </div>
     </div>
 
     <div class="list" style="margin-top:12px">
       ${crew.members.map(id=>{
         const u=state.users.find(x=>x.id===id);
-        return u?userCard(u,true):"";
+        return u?userCard(u,"crew"):"";
       }).join("")}
     </div>
 
@@ -1698,9 +2310,135 @@ function renderCrew(){
   `;
 }
 
+/* CLAN ADMIN */
+
+function openCrewManage(){
+  const crew=myCrew();
+  if(!crew||crew.owner!==state.account.id){return;}
+  $("cmName").value=crew.name||"";
+  $("cmDesc").value=crew.desc||"";
+  $("cmTags").value=(crew.tags||[]).join(", ");
+  $("cmLevel").value=String(crew.level||1);
+  $("cmAdd").value="";
+  renderCrewMembersManage();
+  openModal("crewManageModal");
+}
+
+function renderCrewMembersManage(){
+  const crew=myCrew();
+  if(!crew){return;}
+  $("cmMembers").innerHTML=crew.members.map(id=>{
+    const u=state.users.find(x=>x.id===id);
+    if(!u){return "";}
+    return `
+      <div class="item">
+        <div class="left">
+          <div class="mini-avatar">${esc((u.name||"X")[0])}</div>
+          <div>
+            <b>${esc(u.name)}</b>
+            <small>@${esc(u.username)}${id===crew.owner?" • ADMIN":""}</small>
+          </div>
+        </div>
+        ${id===crew.owner?"":`<button class="btn small" onclick="removeCrewMember('${u.id}')">REMOVE</button>`}
+      </div>
+    `;
+  }).join("");
+}
+
+function saveCrewEdit(){
+  const crew=myCrew();
+  if(!crew||crew.owner!==state.account.id){return;}
+  const name=$("cmName").value.trim();
+  if(!name){
+    showToast("Clan name is required.");
+    return;
+  }
+  crew.name=name;
+  crew.desc=$("cmDesc").value.trim();
+  crew.tags=$("cmTags").value.split(",").map(x=>x.trim()).filter(Boolean);
+  crew.level=Math.max(1,Math.min(5,Number($("cmLevel").value)||1));
+  save();
+  renderAll();
+  closeModal("crewManageModal");
+  showToast("Clan updated.");
+}
+
+function addCrewMember(){
+  const crew=myCrew();
+  if(!crew||crew.owner!==state.account.id){return;}
+  const username=$("cmAdd").value.trim().replace(/^@/,"").toLowerCase();
+  const user=state.users.find(u=>u.username===username);
+  if(!user){
+    showToast("User not found.");
+    return;
+  }
+  if(crew.members.includes(user.id)){
+    showToast("Already a member.");
+    return;
+  }
+  if(state.crews.some(c=>(c.members||[]).includes(user.id))){
+    showToast("That user is already in a clan.");
+    return;
+  }
+  crew.members.push(user.id);
+  crew.requests=(crew.requests||[]).filter(x=>x!==user.id);
+  pushNote(user,"You were added to the clan "+crew.name+".");
+  $("cmAdd").value="";
+  save();
+  renderAll();
+  renderCrewMembersManage();
+  showToast("Member added.");
+}
+
+async function removeCrewMember(id){
+  const crew=myCrew();
+  if(!crew||crew.owner!==state.account.id||id===crew.owner){return;}
+  const user=state.users.find(u=>u.id===id);
+  const ok=await askConfirm("REMOVE MEMBER","Remove "+(user?user.name:"this member")+" from the clan?","REMOVE");
+  if(!ok){return;}
+  crew.members=crew.members.filter(x=>x!==id);
+  if(user){pushNote(user,"You were removed from the clan "+crew.name+".");}
+  save();
+  renderAll();
+  renderCrewMembersManage();
+  showToast("Member removed.");
+}
+
+async function deleteCrew(){
+  const crew=myCrew();
+  if(!crew||crew.owner!==state.account.id){return;}
+  const ok=await askConfirm("DELETE CLAN","Delete "+crew.name+" for everyone? This cannot be undone.","DELETE");
+  if(!ok){return;}
+  const id=crew.id;
+  state.crews=state.crews.filter(c=>c.id!==id);
+  state.crewId=null;
+  cloudDelete("xeo_crews",id);
+  save();
+  closeModal("crewManageModal");
+  renderAll();
+  showToast("Clan deleted.");
+}
+
+async function leaveCrew(){
+  const crew=myCrew();
+  if(!crew){return;}
+  const ok=await askConfirm("LEAVE CLAN","Leave "+crew.name+"?","LEAVE");
+  if(!ok){return;}
+  crew.members=crew.members.filter(x=>x!==state.account.id);
+  state.crewId=null;
+  save();
+  renderAll();
+  showToast("You left the clan.");
+}
+
+function inboxItems(){
+  const notes=(state.account&&state.account.notifications)||[];
+  return [].concat(notes,state.inbox||[]).sort((a,b)=>(b.time||0)-(a.time||0));
+}
+
 function renderInbox(){
 
-  const arr=state.inbox||[];
+  const arr=inboxItems();
 
   const badge=arr.length?`(${arr.length})`:"";
 
@@ -1711,9 +2449,6 @@ function renderInbox(){
   $("inboxList").innerHTML=arr.map(n=>`
     <div class="item">
       <div class="left">
-        <div class="emoji">
-          ${n.type==="achievement"?"A":n.type==="friend"?"F":"!"}
-        </div>
         <div>
           <b>${esc(n.text)}</b>
           <small>${timeAgo(n.time)}</small>
@@ -1726,6 +2461,7 @@ function renderInbox(){
 
 function clearInbox(){
   state.inbox=[];
+  if(state.account){state.account.notifications=[];}
   save();
   renderInbox();
   showToast("Inbox cleared.");
@@ -1754,6 +2490,14 @@ function renderProfile(){
 
   $("privacyText").textContent=state.privacy.toUpperCase();
 
+  $("profileBadges").innerHTML=(state.badges||[]).map(id=>{
+    const a=ACH.find(x=>x.id===id);
+    return a?`<span class="badge black">${esc(a.name)}</span>`:"";
+  }).join("");
+
+  $("profileStreakBox").classList.toggle("hidden",state.mode==="normal");
+  $("profileStreak").textContent=streakOf(state);
+
   $("rankTable").innerHTML=RANKS.map(r=>`
     <tr class="${r.name===rank.name?"current":""}">
       <td>${r.name}</td>
@@ -1776,6 +2520,7 @@ async function editProfile(){
     "Study, Fitness"
   );
 
+  state.profileEdited=true;
   state.account.name=name.trim()||state.account.name;
 
   state.account.interests=(interests||"")
@@ -1979,10 +2724,137 @@ window.addEventListener("offline",updateNetTag);
 updateNetTag();
 
 
+/* STREAK */
+
+function dayKey(off){
+  const d=new Date();
+  d.setDate(d.getDate()+off);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+function streakOf(u){
+  const d=u&&u.lastStreakDate;
+  if(!d){return 0;}
+  return (d===dayKey(0)||d===dayKey(-1))?(u.streak||0):0;
+}
+
+function updateStreak(){
+  const t=dayKey(0);
+  if(state.lastStreakDate===t){return;}
+  state.streak=state.lastStreakDate===dayKey(-1)?(state.streak||0)+1:1;
+  state.lastStreakDate=t;
+  state.bestStreak=Math.max(state.bestStreak||0,state.streak);
+}
+
+
+/* ACHIEVEMENT TAGS (100) */
+
+const ACH=[];
+(function(){
+  const add=(cat,list,get,desc)=>list.forEach(([n,name])=>ACH.push({id:cat+n,name,desc:desc(n),test:c=>get(c)>=n}));
+  add("xp",[[50,"SPARK"],[100,"CENTURY"],[250,"WARMED UP"],[500,"ON THE BOARD"],[1000,"KILO XP"],[1500,"MOMENTUM"],[2500,"POWER BUILD"],[4000,"HIGH VOLTAGE"],[6000,"OVERCLOCKED"],[8000,"RELENTLESS"],[10000,"TEN THOUSAND"],[15000,"UNSTOPPABLE"],[20000,"ELITE ENGINE"],[25000,"XP LEGEND"],[30000,"MYTHIC"],[40000,"BEYOND LIMITS"],[50000,"XP GOD"]],c=>c.xp,n=>`Earn ${n} XP`);
+  add("lvl",[[2,"LEVEL UP"],[3,"GETTING STARTED"],[5,"HIGH FIVE"],[7,"LUCKY SEVEN"],[10,"DOUBLE DIGITS"],[15,"RISING"],[20,"VETERAN"],[25,"QUARTER CENTURY"],[30,"SEASONED"],[40,"HARDENED"],[50,"HALF CENTURY"],[75,"APEX"],[100,"CENTURION"],[150,"ASCENDED"],[200,"TRANSCENDENT"]],c=>c.level,n=>`Reach level ${n}`);
+  add("done",[[1,"FIRST MOVE"],[5,"FIVE DONE"],[10,"TEN TASKS"],[25,"QUARTER HUNDRED"],[50,"FIFTY DONE"],[75,"STEADY HANDS"],[100,"HUNDRED CLUB"],[150,"WORKHORSE"],[200,"TWO HUNDRED"],[300,"GRINDER"],[400,"DISCIPLINED"],[500,"FIVE HUNDRED"],[750,"IRON WILL"],[1000,"THOUSAND CLUB"],[1500,"RELIABLE"],[2000,"MACHINE"],[3000,"TASK LEGEND"]],c=>c.done,n=>`Complete ${n} task${n===1?"":"s"}`);
+  add("streak",[[2,"BACK TO BACK"],[3,"THREE PEAT"],[5,"FIVE ALIVE"],[7,"WEEK WARRIOR"],[10,"TEN IN A ROW"],[14,"FORTNIGHT"],[21,"HABIT FORMED"],[25,"TWENTY FIVE DAYS"],[30,"MONTH MASTER"],[45,"UNBROKEN"],[60,"TWO MONTHS"],[75,"RELENTLESS FLAME"],[90,"QUARTER YEAR"],[100,"HUNDRED DAYS"],[150,"ETERNAL FLAME"],[200,"DOUBLE CENTURY"],[300,"NEARLY A YEAR"],[365,"FULL YEAR"]],c=>c.streak,n=>`Reach a ${n} day streak`);
+  ["BRONZE BORN","GOLD STANDARD","SILVER LINING","DIAMOND MIND","MASTER CLASS","GRANDMASTER STATUS","LEGENDARY"].forEach((name,i)=>{
+    const r=RANKS[i+1];
+    ACH.push({id:"rank"+r.name,name,desc:`Reach ${r.name} rank`,test:c=>c.xp>=r.min});
+  });
+  add("fr",[[1,"FIRST ALLY"],[3,"SMALL CIRCLE"],[5,"SQUAD"],[10,"POPULAR"],[15,"NETWORKER"],[25,"COMMUNITY"],[50,"SOCIAL TITAN"]],c=>c.friends,n=>`Have ${n} friend${n===1?"":"s"}`);
+  ACH.push({id:"crewOwner",name:"CREW FOUNDER",desc:"Create a crew",test:c=>c.crewOwner});
+  ACH.push({id:"crewMember",name:"CREW MEMBER",desc:"Be part of a crew",test:c=>c.crew});
+  [["dopamine","DETOXER","Dopamine Detox"],["ghost","GHOST WALKER","Ghost Mode"],["project50","PROJECT 50 ENTRANT","Project 50"],["club5","EARLY RISER","5AM Club"]].forEach(([id,name,label])=>{
+    ACH.push({id:"mode_"+id,name,desc:`Start ${label}`,test:c=>c.modes.includes(id)});
+  });
+  ACH.push({id:"modeSwitcher",name:"MODE SWITCHER",desc:"Try 3 different modes",test:c=>c.modes.length>=3});
+  add("day",[[3,"TRIPLE DAY"],[5,"FIVE A DAY"],[7,"STACKED DAY"],[10,"PERFECT TEN"]],c=>c.bestDay,n=>`Complete ${n} tasks in one day`);
+  add("made",[[1,"BUILDER"],[5,"ROUTINE BUILDER"],[10,"ARCHITECT"],[20,"SYSTEM DESIGNER"],[50,"MASTER PLANNER"]],c=>c.created,n=>`Create ${n} task${n===1?"":"s"}`);
+  ACH.push({id:"edited",name:"IDENTITY",desc:"Edit your profile",test:c=>c.edited});
+  ACH.push({id:"int3",name:"WELL ROUNDED",desc:"Add 3 interests",test:c=>c.interests>=3});
+  ACH.push({id:"int5",name:"MANY INTERESTS",desc:"Add 5 interests",test:c=>c.interests>=5});
+})();
+
+
+function achCtx(){
+  const me=state.account||{};
+  const xp=me.xp||0;
+  const myCrews=state.crews.filter(c=>(c.members||[]).includes(me.id));
+  return {
+    xp,
+    level:levelFromXP(xp),
+    done:state.totalDone||0,
+    streak:Math.max(state.bestStreak||0,streakOf(state)),
+    friends:(me.friends||[]).length,
+    crew:myCrews.length>0,
+    crewOwner:state.crews.some(c=>c.owner===me.id),
+    modes:state.modesUsed||[],
+    bestDay:state.bestDay||0,
+    created:state.tasksCreated||0,
+    edited:!!state.profileEdited,
+    interests:(me.interests||[]).length
+  };
+}
+
+function openBadges(){
+  renderBadges();
+  openModal("badgeModal");
+}
+
+function renderBadges(){
+
+  const c=achCtx();
+  const sel=state.badges||[];
+  const unlocked=ACH.filter(a=>a.test(c));
+  const ids=new Set(unlocked.map(a=>a.id));
+  const ordered=ACH.filter(a=>ids.has(a.id)).concat(ACH.filter(a=>!ids.has(a.id)));
+
+  $("badgeSub").textContent="Choose up to 5 tags to show on your profile. Selected "+sel.length+"/5 • Unlocked "+unlocked.length+"/"+ACH.length;
+
+  $("badgeList").innerHTML=ordered.map(a=>{
+    const open=ids.has(a.id);
+    const on=sel.includes(a.id);
+    return `
+      <button class="item ${on?"done":""}" ${open?"":"disabled"} onclick="toggleBadge('${a.id}')">
+        <div class="left">
+          <div>
+            <b>${esc(a.name)}</b>
+            <small>${esc(a.desc)}</small>
+          </div>
+        </div>
+        <span class="badge ${open&&!on?"black":""}">${on?"SHOWN":open?"SELECT":"LOCKED"}</span>
+      </button>
+    `;
+  }).join("");
+}
+
+function toggleBadge(id){
+
+  const a=ACH.find(x=>x.id===id);
+
+  if(!a||!a.test(achCtx())){return;}
+
+  state.badges=state.badges||[];
+
+  if(state.badges.includes(id)){
+    state.badges=state.badges.filter(x=>x!==id);
+  }else{
+    if(state.badges.length>=5){
+      showToast("You can show only 5 tags.");
+      return;
+    }
+    state.badges.push(id);
+  }
+
+  save();
+  renderBadges();
+  renderProfile();
+}
+
+
 /* CLOUD SYNC (Firestore) */
 
-const PERSONAL=["friends","requests","inbox","feed","tasks","completed","mode","privacy","crewId","streak","lastActiveDate"];
-const SYNC={ready:false,synced:{},cloudData:{},timer:null,listening:false,warned:false,promise:null};
+const PERSONAL=["friends","requests","inbox","feed","tasks","completed","mode","privacy","crewId","streak","lastActiveDate","modeSince","lastStreakDate","badges","totalDone","bestStreak","bestDay","tasksCreated","modesUsed","profileEdited","clanClaimed"];
+const SYNC={ready:false,synced:{},obj:{},cloudData:{},timer:null,listening:false,warned:false,promise:null};
 
 function cloud(){
   const f=window.XEOFirebase,fs=window.XEOFS;
@@ -2070,9 +2942,14 @@ async function doPush(){
       const k="u:"+u.id;
       if(SYNC.synced[k]!==j){
         const ref=c.doc(c.db,"xeo_users",u.id);
-        if(u.id===myId){await c.setDoc(ref,p);}
-        else{await c.setDoc(ref,p,{merge:true});}
+        if(u.id===myId){
+          await c.setDoc(ref,p);
+        }else{
+          const part=diffFields(p,SYNC.obj[k]);
+          if(Object.keys(part).length){await c.setDoc(ref,part,{merge:true});}
+        }
         SYNC.synced[k]=j;
+        SYNC.obj[k]=clean(p);
       }
     }
     for(const cr of state.crews){
@@ -2080,8 +2957,10 @@ async function doPush(){
       const j=stable(p);
       const k="c:"+cr.id;
       if(SYNC.synced[k]!==j){
-        await c.setDoc(c.doc(c.db,"xeo_crews",cr.id),p);
+        const part=diffFields(p,SYNC.obj[k]);
+        if(Object.keys(part).length){await c.setDoc(c.doc(c.db,"xeo_crews",cr.id),part,{merge:true});}
         SYNC.synced[k]=j;
+        SYNC.obj[k]=p;
       }
     }
     if(!isDirty()){
@@ -2118,6 +2997,28 @@ function buildSynced(us,cs,myId){
   return m;
 }
 
+function buildObjs(us,cs,myId){
+  const m={};
+  us.forEach(d=>{
+    const x=clean(d.data);
+    if(d.id!==myId){delete x.data;}
+    m["u:"+d.id]=x;
+  });
+  cs.forEach(d=>{
+    m["c:"+d.id]=Object.assign(clean(d.data),{id:d.id});
+  });
+  return m;
+}
+
+function diffFields(nw,old){
+  if(!old){return nw;}
+  const o={};
+  Object.keys(nw).forEach(k=>{
+    if(stable(nw[k])!==stable(old[k])){o[k]=nw[k];}
+  });
+  return o;
+}
+
 function applyCloud(us,cs,initial){
 
   const keep=initial&&state.pending;
@@ -2143,7 +3044,20 @@ function applyCloud(us,cs,initial){
     });
     if(oldMine){
       const i=users.findIndex(x=>x.id===oldMine.id);
-      if(i>=0){users[i]=oldMine;}
+      if(i>=0){
+        const cm=users[i];
+        oldMine.friends=Array.from(new Set((cm.friends||[]).concat(oldMine.friends||[])));
+        oldMine.friendReqs=Array.from(new Set((cm.friendReqs||[]).concat(oldMine.friendReqs||[])))
+          .filter(x=>!oldMine.friends.includes(x));
+        const seen=new Set();
+        oldMine.notifications=(cm.notifications||[]).concat(oldMine.notifications||[]).filter(n=>{
+          const k=n.time+"|"+n.text;
+          if(seen.has(k)){return false;}
+          seen.add(k);
+          return true;
+        }).slice(0,30);
+        users[i]=oldMine;
+      }
     }
   }
 
@@ -2179,6 +3093,7 @@ function applyCloud(us,cs,initial){
   }
 
   SYNC.synced=synced;
+  SYNC.obj=buildObjs(us,cs,myId);
   persist();
 
   if(state.account&&$("app").style.display==="block"){
@@ -2258,7 +3173,7 @@ window.addEventListener("online",()=>{
   }
 });
 
-SYNC.promise=waitFirebase(6000).then(cloudPull);
+SYNC.promise=waitFirebase(4000).then(cloudPull);
 
 
 /* START XEO */
