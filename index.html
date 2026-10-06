@@ -466,6 +466,16 @@ button.item:disabled{opacity:.5;cursor:default}
           <div class="list" id="trackerRoutine"></div>
         </div>
 
+        <div class="section-card card hidden" id="am5Card" style="margin-top:15px">
+          <div class="section-head">
+            <div>
+              <div class="label" id="am5Meta"></div>
+              <h2>5 AM ROUTINE</h2>
+            </div>
+          </div>
+          <div class="list" id="am5Body"></div>
+        </div>
+
         <div class="section-card card" style="margin-top:15px">
           <div class="section-head"><h2>RULES</h2></div>
           <div class="notice">
@@ -738,10 +748,10 @@ button.item:disabled{opacity:.5;cursor:default}
     <div class="stats">
       <div class="stat card"><div class="label">USERS</div><div class="n" id="adminUsers">0</div></div>
       <div class="stat card"><div class="label">CREWS</div><div class="n" id="adminCrews">0</div></div>
-      <div class="stat card"><div class="label">ALERTS</div><div class="n" id="adminAlerts">0</div></div>
+      <div class="stat card"><div class="label">INBOX</div><div class="n" id="adminAlerts">0</div></div>
       <div class="stat card"><div class="label">DEVICE</div><div class="n" id="adminDevice">—</div></div>
     </div>
-    <div class="label">ALERTS</div>
+    <div class="label">ADMIN INBOX</div>
     <div class="list" id="adminAlertList" style="margin:8px 0 14px"></div>
     <div class="field">
       <label>Search account</label>
@@ -749,6 +759,8 @@ button.item:disabled{opacity:.5;cursor:default}
     </div>
     <button class="btn black" onclick="adminSearchUser()">SEARCH</button>
     <div class="list" id="adminResults" style="margin-top:12px"></div>
+    <div class="label" style="margin-top:16px">CLANS</div>
+    <div class="list" id="adminCrewList" style="margin:8px 0 14px"></div>
     <hr style="border:0;border-top:2px solid #0b0b0b;margin:20px 0">
     <button class="btn full" onclick="adminReset()">RESET LOCAL DATABASE</button>
   </div>
@@ -788,13 +800,7 @@ button.item:disabled{opacity:.5;cursor:default}
     </div>
     <div class="field">
       <label>Clan level</label>
-      <select id="cmLevel">
-        <option value="1">LEVEL 1 • XP × 1.0</option>
-        <option value="2">LEVEL 2 • XP × 1.1</option>
-        <option value="3">LEVEL 3 • XP × 1.2</option>
-        <option value="4">LEVEL 4 • XP × 1.3</option>
-        <option value="5">LEVEL 5 • XP × 1.4</option>
-      </select>
+      <div class="notice" id="cmLevelInfo"></div>
     </div>
     <button class="btn black full" onclick="saveCrewEdit()">SAVE CHANGES</button>
     <hr style="border:0;border-top:2px solid #0b0b0b;margin:20px 0">
@@ -864,11 +870,11 @@ const RANKS=[
 ];
 
 const MODES=[
-  {id:"normal",name:"NORMAL MODE",desc:"Balanced XP. No modifier.",mult:1},
-  {id:"dopamine",name:"DOPAMINE DETOX",desc:"Focused offline progression.",mult:1.15},
-  {id:"ghost",name:"GHOST MODE",desc:"Low-noise, focused progression.",mult:1.2},
-  {id:"project50",name:"PROJECT 50",desc:"50-day consistency challenge.",mult:1.1},
-  {id:"club5",name:"5AM CLUB",desc:"Early-start objectives get bonus.",mult:1.12}
+  {id:"normal",name:"NORMAL MODE",desc:"Balanced XP. No modifier.",rule:"There are no extra rules.",mult:1.0},
+  {id:"dopamine",name:"DOPAMINE DETOX",desc:"Strict daily completion. Miss 3 days in a row and your account is suspended.",rule:"Every daily task must be completed each day. Missing 3 days in a row suspends your account for 3 days.",mult:1.6},
+  {id:"ghost",name:"GHOST MODE",desc:"Hidden from social and crew listings. XP still counts.",rule:"Your account is hidden from search and crew rosters. Your clan admin can still remove you.",mult:1.3},
+  {id:"project50",name:"PROJECT 50",desc:"50 days of daily tasks, routines and crew tasks. Under 50% done means a rank down.",rule:"Finish your daily tasks, routine and crew tasks. If fewer than 50% are done by Day 50 you lose a rank.",mult:2.0},
+  {id:"club5",name:"5AM CLUB",desc:"Daily 5 AM routine. Under 60% by Day 21 means a rank down.",rule:"Complete the 5 AM routine every day (4:00 to 8:00 AM). Below 60% by Day 21 costs you a rank.",mult:1.8}
 ];
 
 const ARCS=[
@@ -921,7 +927,13 @@ function defaultState(){
     routineDone:{},
     routineWeek:"",
     routineMods:0,
-    taskCounts:{}
+    taskCounts:{},
+    modeDay:null,
+    detoxMisses:0,
+    p50:null,
+    am5:null,
+    am5Done:null,
+    idleDays:0
   };
 }
 
@@ -1404,18 +1416,149 @@ function closeDrawer(){
   $("mobileDrawer").classList.remove("open");
 }
 
+const IDLE_RANKDOWN_DAYS=14;
+const DETOX_LIMIT=3;
+const DETOX_SUSPEND_MS=3*86400000;
+
+function dayDiff(a,b){
+  return Math.round((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/86400000);
+}
+
+function addDaysKey(key,n){
+  const d=new Date(key+"T12:00:00");
+  d.setDate(d.getDate()+n);
+  return fmtDate(d);
+}
+
+function getModeDay(){
+  if(state.modeDay){return state.modeDay;}
+  if(state.modeSince){return fmtDate(new Date(state.modeSince-3*3600*1000));}
+  return null;
+}
+
+function addInbox(text){
+  state.inbox.unshift({id:Date.now()+Math.floor(Math.random()*1000),type:"system",text,time:Date.now()});
+}
+
+function rankDown(reason){
+  const me=state.account;
+  if(!me){return;}
+  const cur=getRank(effXP(me));
+  const idx=RANKS.indexOf(cur);
+  if(idx<=0){
+    addInbox("Rank check failed ("+reason+") but you are already at the lowest rank.");
+    return;
+  }
+  const prev=RANKS[idx-1];
+  const target=prev.min+Math.floor((cur.min-prev.min)/2);
+  me.xp=Math.min(me.xp||0,target);
+  if(me.suspension&&(me.suspension.frozenXp||0)>target){me.suspension.frozenXp=target;}
+  addInbox("Rank down: "+cur.name+" to "+prev.name+". "+reason);
+  setTimeout(()=>showToast("Rank down: "+prev.name),50);
+}
+
+function autoSuspend(reason){
+  const me=state.account;
+  if(!me||isSuspended(me)){return;}
+  me.suspension={until:Date.now()+DETOX_SUSPEND_MS,frozenXp:me.xp||0,at:Date.now(),auto:true,reason};
+  addInbox("Your account was suspended for 3 days. "+reason);
+}
+
+function evaluateDay(dKey,info){
+
+  const me=state.account;
+  if(!me){return;}
+
+  if(info.done>0){
+    state.idleDays=0;
+  }else{
+    state.idleDays=(state.idleDays||0)+1;
+    if(state.idleDays>=IDLE_RANKDOWN_DAYS){
+      state.idleDays=0;
+      rankDown("No tasks were completed for "+IDLE_RANKDOWN_DAYS+" days.");
+    }
+  }
+
+  const md=getModeDay();
+  if(!md||dKey<=md){return;}
+
+  if(state.mode==="dopamine"){
+    const kept=info.assigned>0&&info.done>=info.assigned;
+    if(kept){
+      state.detoxMisses=0;
+    }else{
+      state.detoxMisses=(state.detoxMisses||0)+1;
+      if(state.detoxMisses>=DETOX_LIMIT){
+        state.detoxMisses=0;
+        autoSuspend("Dopamine Detox streak was broken "+DETOX_LIMIT+" days in a row.");
+      }
+    }
+  }
+
+  if(state.mode==="project50"){
+    const p=state.p50||(state.p50={days:0,assigned:0,done:0,checked:false});
+    p.days++;
+    p.assigned+=info.assigned;
+    p.done+=info.done;
+    if(!p.checked&&p.days>=50){
+      p.checked=true;
+      const ratio=p.assigned?p.done/p.assigned:0;
+      if(ratio<0.5){
+        rankDown("Project 50 ended with only "+Math.round(ratio*100)+"% of tasks completed (50% needed).");
+      }else{
+        addInbox("Project 50 complete with "+Math.round(ratio*100)+"% of tasks finished.");
+      }
+    }
+  }
+
+  if(state.mode==="club5"){
+    const a=state.am5||(state.am5={days:0,done:0,checked:false});
+    a.days++;
+    if(info.am5){a.done++;}
+    if(!a.checked&&a.days>=21){
+      a.checked=true;
+      const ratio=a.done/a.days;
+      if(ratio<0.6){
+        rankDown("5 AM routine completion was "+Math.round(ratio*100)+"% by Day 21 (60% needed).");
+      }else{
+        addInbox("5 AM Club Day 21 passed with "+Math.round(ratio*100)+"% completion.");
+      }
+    }
+  }
+}
+
+function rolloverDays(prev,key){
+  const gap=Math.min(120,dayDiff(prev,key));
+  if(gap<=0){return;}
+  evaluateDay(prev,{
+    assigned:state.tasks.length+state.routine.length,
+    done:Object.keys(state.completed||{}).length+Object.keys(state.routineDone||{}).length,
+    am5:!!state.am5Done
+  });
+  for(let i=1;i<gap;i++){
+    evaluateDay(addDaysKey(prev,i),{assigned:state.routine.length,done:0,am5:false});
+  }
+}
+
 function ensureDaily(){
   const key=todayKey();
   if(state.lastActiveDate!==key){
+    if(state.account&&state.lastActiveDate){rolloverDays(state.lastActiveDate,key);}
     state.tasks=[];
     state.completed={};
     state.routineDone={};
+    state.am5Done=null;
     state.lastActiveDate=key;
     persist();
     cloudPush();
   }
   const wk=weekKey(0);
   if(state.routineWeek!==wk){
+    if(state.routineWeek&&state.account&&state.mode==="project50"&&getModeDay()&&myCrew()){
+      const p=state.p50||(state.p50={days:0,assigned:0,done:0,checked:false});
+      p.assigned+=5;
+      p.done+=clanDone(state.account,state.routineWeek).length;
+    }
     state.routineWeek=wk;
     state.routineMods=0;
     persist();
@@ -1430,6 +1573,10 @@ function getModeMultiplier(){
 
 const ROUTINE_MAX=25;
 const ROUTINE_MODS=3;
+
+function isGhost(u){
+  return !!(u&&u.mode==="ghost");
+}
 
 function isSuspended(u){
   return !!(u&&u.suspension&&u.suspension.until>Date.now());
@@ -1477,9 +1624,6 @@ function taskReward(task){
     base=Math.max(15,Math.min(50,Number(task.xp)||15));
   }
   base*=getModeMultiplier();
-  if(state.mode==="club5"&&/5am|wake|morning|early/i.test(task.name)){
-    base*=1.2;
-  }
   return Math.round(base);
 }
 
@@ -1689,6 +1833,69 @@ function showAddTask(){
   openModal("taskModal");
 }
 
+/* 5 AM ROUTINE */
+
+function am5Window(){
+  const h=new Date().getHours();
+  return h>=4&&h<8;
+}
+
+function toggleAm5(){
+
+  ensureDaily();
+
+  if(state.mode!=="club5"){return;}
+
+  const me=state.account;
+
+  if(state.am5Done){
+    const got=state.am5Done.xp||0;
+    state.am5Done=null;
+    undoXP(got,"Completed 5 AM routine");
+    return;
+  }
+
+  if(!am5Window()){
+    showToast("The 5 AM routine opens at 4:00 AM and closes at 8:00 AM.");
+    return;
+  }
+
+  const xp=Math.round(seededInt(me.id+"|am5|"+todayKey(),40,80)*getModeMultiplier());
+
+  state.am5Done={doneAt:Date.now(),xp};
+
+  awardXP(xp,"Completed 5 AM routine",true);
+}
+
+function renderAm5(){
+
+  const card=$("am5Card");
+
+  if(state.mode!=="club5"){
+    card.classList.add("hidden");
+    return;
+  }
+
+  card.classList.remove("hidden");
+
+  const a=state.am5||{days:0,done:0};
+  const done=state.am5Done;
+
+  $("am5Meta").textContent="DAY "+Math.min(21,a.days)+"/21 • "+(a.days?Math.round(a.done/a.days*100):0)+"% COMPLETED • 60% NEEDED";
+
+  $("am5Body").innerHTML=`
+    <div class="item ${done?"done":""}">
+      <div class="left">
+        <div>
+          <b>Wake up and complete your 5 AM routine</b>
+          <small>Opens 4:00 AM, closes 8:00 AM • ${done?"+"+done.xp+" XP":"daily bonus XP"}</small>
+        </div>
+      </div>
+      <button class="complete ${done?"done":""}" onclick="toggleAm5()">${done?"DONE":"CHECK IN"}</button>
+    </div>
+  `;
+}
+
 /* ROUTINE EDITOR */
 
 let routineDraft=[];
@@ -1860,6 +2067,7 @@ function renderHomeGoals(){
 }
 
 function renderRoutine(){
+  renderAm5();
   const n=state.routine.length;
   $("routineMeta").textContent=n+"/"+ROUTINE_MAX+" TASKS • MODIFIED "+(state.routineMods||0)+"/"+ROUTINE_MODS+" THIS WEEK";
   $("trackerRoutine").innerHTML=routineItemsHTML()||`
@@ -1952,12 +2160,32 @@ function renderModes(){
       tags.push("CHANGE IN "+left+"D");
     }
 
+    if(sel&&m.id==="dopamine"){
+      tags.push("MISSED "+(state.detoxMisses||0)+"/"+DETOX_LIMIT);
+    }
+
+    if(sel&&m.id==="ghost"){
+      tags.push("HIDDEN");
+    }
+
+    if(sel&&m.id==="project50"){
+      const pp=state.p50||{days:0,assigned:0,done:0};
+      tags.push("DAY "+Math.min(50,pp.days)+"/50");
+      tags.push((pp.assigned?Math.round(pp.done/pp.assigned*100):0)+"% DONE");
+    }
+
+    if(sel&&m.id==="club5"){
+      const aa=state.am5||{days:0,done:0};
+      tags.push("DAY "+Math.min(21,aa.days)+"/21");
+      tags.push((aa.days?Math.round(aa.done/aa.days*100):0)+"% 5AM");
+    }
+
     return `
       <button class="mode ${sel?"selected":""} ${(!sel&&left>0)?"locked":""}" onclick="selectMode('${m.id}')">
         ${tags.length?`<div class="mode-tags">${tags.map(t=>`<span class="badge">${t}</span>`).join("")}</div>`:""}
         <h3>${m.name}</h3>
         <p>${m.desc}</p>
-        <div style="margin-top:8px;font-size:10px;font-weight:900">XP × ${m.mult}</div>
+        <div style="margin-top:8px;font-size:10px;font-weight:900">XP ${m.id==="normal"?"1x":"1x-2x"}</div>
       </button>
     `;
 
@@ -1983,7 +2211,7 @@ async function selectMode(id){
 
   const ok=await askConfirm(
     "CHANGE MODE",
-    "Switch to "+m.name+"? You will not be able to change mode again for 25 days.",
+    "Switch to "+m.name+"? "+m.rule+" You will not be able to change mode again for 25 days.",
     "SWITCH"
   );
 
@@ -1991,6 +2219,10 @@ async function selectMode(id){
 
   state.mode=id;
   state.modeSince=Date.now();
+  state.modeDay=todayKey();
+  state.detoxMisses=0;
+  state.p50=null;
+  state.am5=null;
   state.streak=0;
   state.lastStreakDate="";
   state.modesUsed=state.modesUsed||[];
@@ -2034,6 +2266,7 @@ function searchFriends(){
 
   const results=state.users.filter(u=>{
     if(!state.account||u.id===state.account.id){return false;}
+    if(isGhost(u)&&!(state.account.friends||[]).includes(u.id)){return false;}
     if(!q){return true;}
     return u.username.includes(q)||u.name.toLowerCase().includes(q);
   }).slice(0,10);
@@ -2072,7 +2305,7 @@ function userCard(u,mode){
         <div class="mini-avatar">${esc((u.name||"X")[0])}</div>
         <div>
           <b>${esc(u.name)}</b>
-          <small>@${esc(u.username)} • LV ${levelFromXP(effXP(u))} • ${getRank(effXP(u)).name}${isFriend?" • STREAK "+streakOf(u):""}</small>
+          <small>@${esc(u.username)} • LV ${levelFromXP(effXP(u))} • ${getRank(effXP(u)).name}${isFriend?" • STREAK "+streakOf(u):""}${mode==="crew"&&isGhost(u)?" • GHOST":""}</small>
         </div>
       </div>
       ${action}
@@ -2094,6 +2327,11 @@ function sendFriendRequest(id){
   const user=state.users.find(u=>u.id===id);
 
   if(!me||!user||user.id===me.id){return;}
+
+  if(isGhost(user)&&!(me.friends||[]).includes(user.id)){
+    showToast("User not found.");
+    return;
+  }
 
   me.friends=me.friends||[];
   me.friendReqs=me.friendReqs||[];
@@ -2171,7 +2409,7 @@ function addFriendByUsername(){
 
   const user=state.users.find(u=>u.username===username);
 
-  if(!user){
+  if(!user||(isGhost(user)&&!(state.account.friends||[]).includes(user.id))){
     showToast("User not found.");
     return;
   }
@@ -2347,6 +2585,11 @@ function createCrew(){
     desc,
     tags,
     level:1,
+    weeks:{},
+    contrib:{},
+    adj:0,
+    decayStep:0,
+    lastActive:Date.now(),
     code:Math.random().toString(36).slice(2,8).toUpperCase(),
     owner:state.account.id,
     members:[state.account.id],
@@ -2546,8 +2789,103 @@ function teamStats(crew,week){
   return {members,n,hard,tier};
 }
 
+/* CLAN LEVELS (1-20, sub-levels I-III from level 5) */
+
+const CLAN_MAX_LEVEL=20;
+
+function crewScore(c){
+  const w=c.weeks||{};
+  const k=c.contrib||{};
+  return Object.keys(w).reduce((a,x)=>a+(Number(w[x])||0),0)+
+         Object.keys(k).reduce((a,x)=>a+(Number(k[x])||0),0)+
+         (Number(c.adj)||0);
+}
+
+function clanNeed(L){
+  return 15*(L-1)*L/2;
+}
+
+function clanLevelOf(score){
+  let L=1;
+  while(L<CLAN_MAX_LEVEL&&score>=clanNeed(L+1)){L++;}
+  return L;
+}
+
+function clanSub(score,L){
+  if(L<5){return 0;}
+  const lo=clanNeed(L);
+  const hi=L<CLAN_MAX_LEVEL?clanNeed(L+1):lo+(clanNeed(CLAN_MAX_LEVEL)-clanNeed(CLAN_MAX_LEVEL-1));
+  const f=(score-lo)/(hi-lo);
+  return f<1/3?1:f<2/3?2:3;
+}
+
+function clanLabel(c){
+  const sc=crewScore(c);
+  const L=clanLevelOf(sc);
+  const sub=clanSub(sc,L);
+  return L+(sub?" "+["","I","II","III"][sub]:"");
+}
+
+function isCrewSuspended(c){
+  return !!(c&&c.suspension&&c.suspension.until>Date.now());
+}
+
+function crewSuspendedGuard(){
+  const c=myCrew();
+  if(c&&isCrewSuspended(c)){
+    showToast("Your clan is suspended.");
+    return true;
+  }
+  return false;
+}
+
+function inactiveDays(c){
+  const t=c.lastActive||c.created||Date.now();
+  return Math.max(0,Math.floor((Date.now()-t)/86400000));
+}
+
+function weekPoints(crew,week){
+  const members=(crew.members||[]).map(id=>state.users.find(x=>x.id===id)).filter(Boolean);
+  const total=members.reduce((a,u)=>a+clanDone(u,week).length,0);
+  const active=members.filter(u=>clanDone(u,week).length>0).length;
+  const tier=teamStats(crew,week).tier;
+  return total+active*2+(tier==="FULL"?25:tier==="GOOD"?10:0);
+}
+
+function settleCrew(crew){
+
+  let changed=false;
+  crew.weeks=crew.weeks||{};
+
+  const d=inactiveDays(crew);
+  const drops=d<45?0:1+Math.floor((d-45)/15);
+  const step=crew.decayStep||0;
+
+  if(drops>step){
+    const sc=crewScore(crew);
+    const L=clanLevelOf(sc);
+    const L2=Math.max(1,L-(drops-step));
+    if(L2<L){
+      crew.adj=(crew.adj||0)+(clanNeed(L2)-sc);
+      (crew.members||[]).forEach(id=>{
+        const u=state.users.find(x=>x.id===id);
+        if(u){pushNote(u,"Your clan "+crew.name+" dropped to level "+clanLabel(crew)+" after "+d+" days of inactivity.");}
+      });
+    }
+    crew.decayStep=drops;
+    changed=true;
+  }
+
+  return changed;
+}
+
+function settleMyCrew(){
+  const c=myCrew();
+  return c?settleCrew(c):false;
+}
+
 function clanMult(crew){
-  return 1+0.1*((crew.level||1)-1);
+  return 1+0.02*(clanLevelOf(crewScore(crew))-1);
 }
 
 function clanPayout(crew,week,u){
@@ -2560,6 +2898,7 @@ function clanPayout(crew,week,u){
 
 function toggleClanTask(idx){
   if(suspendedGuard()){return;}
+  if(crewSuspendedGuard()){return;}
   const crew=myCrew();
   const me=state.account;
   if(!crew||!me){return;}
@@ -2567,7 +2906,11 @@ function toggleClanTask(idx){
   me.clanWeeks=me.clanWeeks||{};
   const arr=(me.clanWeeks[wk]||[]).slice();
   const i=arr.indexOf(idx);
-  if(i>=0){arr.splice(i,1);}else{arr.push(idx);}
+  if(i>=0){arr.splice(i,1);}else{
+    arr.push(idx);
+    crew.lastActive=Date.now();
+    crew.decayStep=0;
+  }
   me.clanWeeks[wk]=arr;
   Object.keys(me.clanWeeks).sort().slice(0,-6).forEach(k=>{delete me.clanWeeks[k];});
   save();
@@ -2581,6 +2924,7 @@ function grantXP(amount,text){
 function claimClan(week){
 
   if(suspendedGuard()){return;}
+  if(crewSuspendedGuard()){return;}
 
   const crew=myCrew();
   const me=state.account;
@@ -2609,7 +2953,12 @@ function claimClan(week){
   }
 
   state.clanClaimed.push(key);
-  grantXP(r.xp,"Claimed clan reward");
+
+  const pts=Math.max(1,Math.round(r.xp/20));
+  crew.contrib=crew.contrib||{};
+  crew.contrib[me.id+"|"+week]=pts;
+
+  grantXP(r.xp,"Claimed clan reward (+"+pts+" clan pts)");
 }
 
 function renderCrew(){
@@ -2638,9 +2987,21 @@ function renderCrew(){
     return;
   }
 
+  if(isCrewSuspended(crew)){
+    el.innerHTML=`
+      <div class="notice">
+        <b>YOUR CLAN IS SUSPENDED.</b><br>
+        ${esc(crew.name)} is suspended until ${esc(new Date(crew.suspension.until).toLocaleString())}.
+        Clan tasks and rewards are locked.
+      </div>
+    `;
+    return;
+  }
+
   const me=state.account;
   const owner=crew.owner===me.id;
-  const lvl=crew.level||1;
+  const clanPts=crewScore(crew);
+  const idle=inactiveDays(crew);
   const wk=weekKey(0);
   const st=teamStats(crew,wk);
   const mine=clanDone(me,wk);
@@ -2669,8 +3030,10 @@ function renderCrew(){
         ${owner?`<span style="margin-left:12px">ROOM CODE: ${esc(crew.code)}</span>`:""}
       </div>
       <div class="row" style="margin-top:14px">
-        <span class="badge black">CLAN LEVEL ${lvl}</span>
-        <span class="badge">XP × ${clanMult(crew).toFixed(1)}</span>
+        <span class="badge black">CLAN LEVEL ${clanLabel(crew)}</span>
+        <span class="badge">${clanPts} PTS</span>
+        <span class="badge">XP × ${clanMult(crew).toFixed(2)}</span>
+        ${idle>=30?`<span class="badge">INACTIVE ${idle}D</span>`:""}
         ${owner
           ?`<button class="btn small" onclick="openCrewManage()">MANAGE CLAN</button>`
           :`<button class="btn small" onclick="leaveCrew()">LEAVE CLAN</button>`}
@@ -2717,14 +3080,14 @@ function renderCrew(){
         A member participates by completing at least 1 clan task.
         Under 60% participation: up to 300 XP. 60% or more: a 50% XP bonus (up to 450 XP).
         100% participation: 500 XP. Bonus tiers need 3+ members.
-        Your XP scales with the tasks you finish and your clan level. Rewards are claimed after the week ends.
+        Your XP scales with the tasks you finish and your clan level. Rewards are claimed after the week ends. The XP you claim also raises your clan level.
       </div>
     </div>
 
     <div class="section-card card" style="margin-top:12px">
       <div class="section-head"><h2>TEAM PROGRESS</h2></div>
       <div class="list">
-        ${st.members.map(u=>{
+        ${st.members.filter(u=>owner||!isGhost(u)||u.id===me.id).map(u=>{
           const d=clanDone(u,wk).length;
           return `
             <div class="item">
@@ -2732,7 +3095,7 @@ function renderCrew(){
                 <div class="mini-avatar">${esc((u.name||"X")[0])}</div>
                 <div>
                   <b>${esc(u.name)}</b>
-                  <small>@${esc(u.username)}${u.id===crew.owner?" • ADMIN":""}</small>
+                  <small>@${esc(u.username)}${u.id===crew.owner?" • ADMIN":""}${isGhost(u)?" • GHOST":""}</small>
                 </div>
               </div>
               <span class="badge ${d>=1?"black":""}">${d}/5${d>=1?" ACTIVE":""}</span>
@@ -2764,7 +3127,7 @@ function renderCrew(){
       <div class="list">
         ${crew.members.map(id=>{
           const u=state.users.find(x=>x.id===id);
-          return u?userCard(u,"crew"):"";
+          return u&&(owner||!isGhost(u)||u.id===me.id)?userCard(u,"crew"):"";
         }).join("")}
       </div>
     </div>
@@ -2803,12 +3166,13 @@ function renderCrew(){
 /* CLAN ADMIN */
 
 function openCrewManage(){
+  if(crewSuspendedGuard()){return;}
   const crew=myCrew();
   if(!crew||crew.owner!==state.account.id){return;}
   $("cmName").value=crew.name||"";
   $("cmDesc").value=crew.desc||"";
   $("cmTags").value=(crew.tags||[]).join(", ");
-  $("cmLevel").value=String(crew.level||1);
+  $("cmLevelInfo").textContent="LEVEL "+clanLabel(crew)+" • "+crewScore(crew)+" points. Clan levels (1 to 20) rise as members claim clan XP, and drop after 45+ days of inactivity.";
   $("cmAdd").value="";
   renderCrewMembersManage();
   openModal("crewManageModal");
@@ -2826,7 +3190,7 @@ function renderCrewMembersManage(){
           <div class="mini-avatar">${esc((u.name||"X")[0])}</div>
           <div>
             <b>${esc(u.name)}</b>
-            <small>@${esc(u.username)}${id===crew.owner?" • ADMIN":""}</small>
+            <small>@${esc(u.username)}${id===crew.owner?" • ADMIN":""}${isGhost(u)?" • GHOST":""}</small>
           </div>
         </div>
         ${id===crew.owner?"":`<button class="btn small" onclick="removeCrewMember('${u.id}')">REMOVE</button>`}
@@ -2846,7 +3210,6 @@ function saveCrewEdit(){
   crew.name=name;
   crew.desc=$("cmDesc").value.trim();
   crew.tags=$("cmTags").value.split(",").map(x=>x.trim()).filter(Boolean);
-  crew.level=Math.max(1,Math.min(5,Number($("cmLevel").value)||1));
   save();
   renderAll();
   closeModal("crewManageModal");
@@ -2904,6 +3267,11 @@ async function deleteCrew(){
   const ok=await askConfirm("DELETE CLAN","Delete "+crew.name+" for everyone? This cannot be undone.","DELETE");
   if(!ok){return;}
   const id=crew.id;
+  crew.members.forEach(mid=>{
+    if(mid===crew.owner){return;}
+    const mu=state.users.find(x=>x.id===mid);
+    if(mu){pushNote(mu,"Your clan "+crew.name+" was deleted by its admin.");}
+  });
   state.crews=state.crews.filter(c=>c.id!==id);
   state.crewId=null;
   cloudDelete("xeo_crews",id);
@@ -3050,6 +3418,7 @@ function renderAll(){
   if(!state.account){return;}
 
   ensureDaily();
+  if(settleMyCrew()){save();}
   renderDashboard();
   renderHomeGoals();
   renderGoals("trackerGoals");
@@ -3112,20 +3481,189 @@ function adminFlags(){
   return out;
 }
 
+function adminDismissed(){
+  try{return JSON.parse(localStorage.getItem("XEO_ADMIN_DISMISSED"))||[];}catch(e){return [];}
+}
+
+function adminDismissKey(key){
+  const a=adminDismissed();
+  if(!a.includes(key)){a.push(key);}
+  localStorage.setItem("XEO_ADMIN_DISMISSED",JSON.stringify(a.slice(-200)));
+  renderAdminAll();
+}
+
+function adminInboxItems(){
+
+  const out=[];
+  const dis=adminDismissed();
+
+  state.users.forEach(u=>{
+    (u.flags||[]).forEach(f=>{
+      out.push({
+        kind:"REPEATED TASK",
+        title:"@"+u.username+" repeated a task",
+        text:'"'+f.name+'" entered '+f.count+" times",
+        actions:`<button class="btn small" onclick="adminDismiss('${u.id}')">DISMISS</button>`
+      });
+    });
+    if(isSuspended(u)){
+      const key="susU:"+u.id+":"+(u.suspension.at||0);
+      if(!dis.includes(key)){
+        out.push({
+          kind:"ACCOUNT SUSPENDED",
+          title:"@"+u.username+" is suspended",
+          text:"until "+new Date(u.suspension.until).toLocaleString()+(u.suspension.reason?" • "+u.suspension.reason:""),
+          actions:`<button class="btn small" onclick="adminSuspend('${u.id}')">UNSUSPEND</button>
+                   <button class="btn small" onclick="adminDismissKey('${key}')">DISMISS</button>`
+        });
+      }
+    }
+  });
+
+  state.crews.forEach(c=>{
+    const d=inactiveDays(c);
+    if(isCrewSuspended(c)){
+      const key="susC:"+c.id+":"+(c.suspension.at||0);
+      if(!dis.includes(key)){
+        out.push({
+          kind:"CLAN SUSPENDED",
+          title:c.name+" is suspended",
+          text:"until "+new Date(c.suspension.until).toLocaleString(),
+          actions:`<button class="btn small" onclick="adminSuspendCrew('${c.id}')">LIFT</button>
+                   <button class="btn small" onclick="adminDismissKey('${key}')">DISMISS</button>`
+        });
+      }
+    }
+    if(d>=90){
+      const key="inact90:"+c.id;
+      if(!dis.includes(key)){
+        out.push({
+          kind:"INACTIVITY ALERT",
+          title:c.name+" inactive for "+d+" days",
+          text:"Complete inactivity. Review for suspension or deletion.",
+          actions:`<button class="btn small" onclick="adminSuspendCrew('${c.id}')">SUSPEND</button>
+                   <button class="btn small" onclick="adminDeleteCrew('${c.id}')">DELETE</button>
+                   <button class="btn small" onclick="adminDismissKey('${key}')">DISMISS</button>`
+        });
+      }
+    }else if(d>=45){
+      const key="inact45:"+c.id+":"+Math.floor((d-45)/15);
+      if(!dis.includes(key)){
+        out.push({
+          kind:"INACTIVITY WARNING",
+          title:c.name+" inactive for "+d+" days",
+          text:"Clan level is being downgraded.",
+          actions:`<button class="btn small" onclick="adminDismissKey('${key}')">DISMISS</button>`
+        });
+      }
+    }
+  });
+
+  return out;
+}
+
 function renderAdminAlerts(){
-  const arr=adminFlags();
+  const arr=adminInboxItems();
   $("adminAlerts").textContent=arr.length;
-  $("adminAlertList").innerHTML=arr.map(a=>`
+  $("adminAlertList").innerHTML=arr.map(i=>`
     <div class="item">
       <div class="left">
         <div>
-          <b>@${esc(a.u.username)} repeated a task</b>
-          <small>"${esc(a.f.name)}" entered ${a.f.count} times</small>
+          <b>${esc(i.title)}</b>
+          <small>${esc(i.kind)} • ${esc(i.text)}</small>
         </div>
       </div>
-      <button class="btn small" onclick="adminDismiss('${a.u.id}')">DISMISS</button>
+      <div class="row">${i.actions}</div>
     </div>
-  `).join("")||`<div class="notice">No alerts.</div>`;
+  `).join("")||`<div class="notice">Admin inbox is empty.</div>`;
+}
+
+function renderAdminCrews(){
+  $("adminCrewList").innerHTML=state.crews.map(c=>`
+    <div class="item">
+      <div class="left">
+        <div>
+          <b>${esc(c.name)}</b>
+          <small>LV ${clanLabel(c)} • ${c.members.length}/${CREW_MAX} members • inactive ${inactiveDays(c)}d${isCrewSuspended(c)?" • SUSPENDED":""}</small>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn small" onclick="adminSuspendCrew('${c.id}')">${isCrewSuspended(c)?"LIFT":"SUSPEND"}</button>
+        <button class="btn small" onclick="adminDeleteCrew('${c.id}')">DELETE</button>
+      </div>
+    </div>
+  `).join("")||`<div class="notice">No clans yet.</div>`;
+}
+
+function renderAdminAll(){
+  renderAdminAlerts();
+  renderAdminCrews();
+}
+
+function notifyCrew(c,text){
+  (c.members||[]).forEach(id=>{
+    const u=state.users.find(x=>x.id===id);
+    if(u){pushNote(u,text);}
+  });
+}
+
+async function adminSuspendCrew(id){
+
+  const c=state.crews.find(x=>x.id===id);
+
+  if(!c){return;}
+
+  if(isCrewSuspended(c)){
+    c.suspension=null;
+    notifyCrew(c,"The suspension of your clan "+c.name+" was lifted.");
+    save();
+    renderAdminAll();
+    renderCrew();
+    showToast("Clan suspension lifted.");
+    return;
+  }
+
+  const v=await askPrompt("SUSPEND CLAN","How long should "+c.name+" be suspended? Examples: 12h, 3d, 7d","7d");
+
+  if(v===null){return;}
+
+  const ms=parseDuration(v);
+
+  if(!ms){
+    showToast("Enter a valid duration like 12h or 3d.");
+    return;
+  }
+
+  c.suspension={until:Date.now()+ms,at:Date.now()};
+  notifyCrew(c,"Your clan "+c.name+" was suspended until "+new Date(c.suspension.until).toLocaleString()+".");
+
+  save();
+  renderAdminAll();
+  renderCrew();
+  showToast("Clan suspended.");
+}
+
+async function adminDeleteCrew(id){
+
+  const c=state.crews.find(x=>x.id===id);
+
+  if(!c){return;}
+
+  if(!(await askConfirm("DELETE CLAN","Delete "+c.name+" for everyone? Members will be notified.","DELETE"))){
+    return;
+  }
+
+  notifyCrew(c,"Your clan "+c.name+" was deleted by an admin.");
+
+  state.crews=state.crews.filter(x=>x.id!==id);
+  state.crewId=null;
+  cloudDelete("xeo_crews",id);
+
+  save();
+  renderAdminAll();
+  renderCrew();
+  $("adminCrews").textContent=state.crews.length;
+  showToast("Clan deleted.");
 }
 
 function adminDismiss(id){
@@ -3133,7 +3671,7 @@ function adminDismiss(id){
   if(!u){return;}
   u.flags=[];
   save();
-  renderAdminAlerts();
+  renderAdminAll();
 }
 
 function openAdmin(){
@@ -3143,7 +3681,7 @@ function openAdmin(){
   $("adminDevice").textContent=state.device||"—";
   $("adminSearch").value="";
   $("adminResults").innerHTML="";
-  renderAdminAlerts();
+  renderAdminAll();
 
   openModal("adminModal");
 }
@@ -3193,6 +3731,7 @@ async function adminSuspend(id){
     pushNote(u,"Your suspension was lifted.");
     save();
     adminSearchUser();
+    renderAdminAll();
     showToast("Suspension lifted.");
     return;
   }
@@ -3218,6 +3757,7 @@ async function adminSuspend(id){
 
   save();
   adminSearchUser();
+  renderAdminAll();
   showToast("Account suspended.");
 }
 
@@ -3425,7 +3965,7 @@ function toggleBadge(id){
 
 /* CLOUD SYNC (Firestore) */
 
-const PERSONAL=["friends","requests","inbox","feed","tasks","completed","mode","privacy","crewId","streak","lastActiveDate","modeSince","lastStreakDate","badges","totalDone","bestStreak","bestDay","tasksCreated","modesUsed","profileEdited","clanClaimed","routine","routineDone","routineWeek","routineMods","taskCounts"];
+const PERSONAL=["friends","requests","inbox","feed","tasks","completed","mode","privacy","crewId","streak","lastActiveDate","modeSince","lastStreakDate","badges","totalDone","bestStreak","bestDay","tasksCreated","modesUsed","profileEdited","clanClaimed","routine","routineDone","routineWeek","routineMods","taskCounts","modeDay","detoxMisses","p50","am5","am5Done","idleDays"];
 const SYNC={ready:false,synced:{},obj:{},cloudData:{},timer:null,listening:false,warned:false,promise:null};
 
 function cloud(){
