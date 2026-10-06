@@ -10,7 +10,7 @@
 <script type="module" onerror="window.XEOFirebase={connected:false};window.dispatchEvent(new CustomEvent('xeo-firebase-error'))">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-analytics.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyCrCh_HuHPnucfva_o5A1-qdeNGs9Tiq14",
@@ -31,7 +31,7 @@
     } catch (analyticsError) {
       console.warn("XEO Firebase Analytics could not start in this environment.", analyticsError);
     }
-    window.XEOFS = { collection, doc, setDoc, getDocs, deleteDoc, onSnapshot };
+    window.XEOFS = { collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, runTransaction };
     window.XEOFirebase = { app, analytics, db, config: firebaseConfig, connected: true };
     window.dispatchEvent(new CustomEvent("xeo-firebase-ready"));
     console.log("XEO Firebase connected successfully.");
@@ -94,6 +94,7 @@ button{cursor:pointer}
 .key{aspect-ratio:1;border:2px solid #0b0b0b;border-radius:50%;background:#fff;color:#0b0b0b;font-size:22px;font-weight:900;box-shadow:4px 5px 0 #0b0b0b}
 .key:active{transform:translate(4px,5px);box-shadow:none}
 .key.zero{grid-column:2}
+.pc-mode .keypad{display:none}
 .link{border:0;background:none;text-decoration:underline;font-weight:800;color:#444;padding:8px 0}
 
 /* APP */
@@ -275,6 +276,8 @@ button{cursor:pointer}
 button.item{width:100%;text-align:left;color:#0b0b0b}
 button.item:disabled{opacity:.5;cursor:default}
 .tags:empty{display:none}
+.rt-input{width:100%;padding:10px;border:2px solid #0b0b0b;border-radius:9px;background:#fff;color:#0b0b0b;outline:none}
+#routineModal .item{padding:8px 10px}
 </style>
 </head>
 
@@ -323,6 +326,9 @@ button.item:disabled{opacity:.5;cursor:default}
     <div class="row" style="justify-content:center;margin-top:15px">
       <button class="link" id="switchAuth">Create a new account</button>
     </div>
+    <div class="row" style="justify-content:center;margin-top:0">
+      <button class="link" id="backToDevice">← Change device</button>
+    </div>
   </div>
 
 </div>
@@ -366,6 +372,8 @@ button.item:disabled{opacity:.5;cursor:default}
 
       <!-- HOME -->
       <section class="page active" id="page-home">
+
+        <div id="suspendBanner"></div>
 
         <div class="hero">
           <div class="hero-main">
@@ -439,7 +447,7 @@ button.item:disabled{opacity:.5;cursor:default}
         <div class="section-card card">
           <div class="section-head">
             <div>
-              <div class="label">DAILY TRACKER</div>
+              <div class="label">DAILY TASKS • RESET 3:00 AM</div>
               <h2 id="trackerDate">TODAY</h2>
             </div>
             <button class="btn small" onclick="showAddTask()">+ ADD TASK</button>
@@ -448,8 +456,24 @@ button.item:disabled{opacity:.5;cursor:default}
         </div>
 
         <div class="section-card card" style="margin-top:15px">
-          <div class="section-head"><h2>ADD ROUTINE</h2></div>
-          <div class="notice">Custom task XP is limited to 50. XEO starts with an empty routine.</div>
+          <div class="section-head">
+            <div>
+              <div class="label" id="routineMeta">DAILY ROUTINE</div>
+              <h2>DAILY ROUTINE</h2>
+            </div>
+            <button class="btn small" onclick="openRoutineEditor()">EDIT ROUTINE</button>
+          </div>
+          <div class="list" id="trackerRoutine"></div>
+        </div>
+
+        <div class="section-card card" style="margin-top:15px">
+          <div class="section-head"><h2>RULES</h2></div>
+          <div class="notice">
+            Daily tasks clear every day at 3:00 AM. Your XP, level and rank stay saved.
+            Each completed task earns 15 to 50 XP, and unchecking it removes that XP.
+            Your routine can be modified 3 times per week and holds up to 25 tasks.
+            Routine XP depends on how many tasks it has.
+          </div>
           <div class="row" style="margin-top:12px">
             <button class="btn" onclick="showAddTask()">CREATE TASK</button>
             <button class="btn" onclick="clearCompleted()">CLEAR COMPLETED</button>
@@ -654,7 +678,7 @@ button.item:disabled{opacity:.5;cursor:default}
   <div class="modal-box">
     <button class="close" onclick="closeModal('taskModal')">×</button>
     <h2 class="title">NEW TASK</h2>
-    <p class="sub">Create a routine objective and assign up to 50 XP.</p>
+    <p class="sub">Daily tasks reset every day at 3:00 AM. Each completed task earns 15 to 50 XP.</p>
     <div class="field">
       <label>Task name</label>
       <input id="taskName" maxlength="40" placeholder="Example: 45 min exercise">
@@ -662,10 +686,6 @@ button.item:disabled{opacity:.5;cursor:default}
     <div class="field">
       <label>Description</label>
       <input id="taskDesc" maxlength="80" placeholder="Optional">
-    </div>
-    <div class="field">
-      <label>XP reward</label>
-      <input id="taskXP" type="number" min="1" max="50" value="10">
     </div>
     <button class="btn black full" onclick="createTask()">CREATE TASK</button>
   </div>
@@ -721,6 +741,8 @@ button.item:disabled{opacity:.5;cursor:default}
       <div class="stat card"><div class="label">ALERTS</div><div class="n" id="adminAlerts">0</div></div>
       <div class="stat card"><div class="label">DEVICE</div><div class="n" id="adminDevice">—</div></div>
     </div>
+    <div class="label">ALERTS</div>
+    <div class="list" id="adminAlertList" style="margin:8px 0 14px"></div>
     <div class="field">
       <label>Search account</label>
       <input id="adminSearch" placeholder="@username">
@@ -732,6 +754,20 @@ button.item:disabled{opacity:.5;cursor:default}
   </div>
 </div>
 
+
+<!-- ROUTINE EDITOR MODAL -->
+<div class="modal hidden" id="routineModal">
+  <div class="modal-box">
+    <button class="close" onclick="closeModal('routineModal')">×</button>
+    <h2 class="title">EDIT ROUTINE</h2>
+    <p class="sub" id="routineInfo"></p>
+    <div class="list" id="routineRows" style="margin-top:12px"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" onclick="addRoutineRow()">+ ADD ROW</button>
+    </div>
+    <button class="btn black full" style="margin-top:14px" onclick="saveRoutine()">SAVE ROUTINE</button>
+  </div>
+</div>
 
 <!-- CLAN MANAGE MODAL -->
 <div class="modal hidden" id="crewManageModal">
@@ -880,7 +916,12 @@ function defaultState(){
     tasksCreated:0,
     modesUsed:[],
     profileEdited:false,
-    clanClaimed:[]
+    clanClaimed:[],
+    routine:[],
+    routineDone:{},
+    routineWeek:"",
+    routineMods:0,
+    taskCounts:{}
   };
 }
 
@@ -939,7 +980,7 @@ function esc(v){
 }
 
 function todayKey(){
-  const d=new Date();
+  const d=new Date(Date.now()-3*3600*1000);
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
 
@@ -1055,15 +1096,32 @@ $("deviceContinue").onclick=async function(){
   updateAuthUI();
 };
 
+function isPC(){
+  return (selectedDevice||state.device)==="PC";
+}
+
 function updateAuthUI(){
+  const pc=isPC();
+  $("accountScreen").classList.toggle("pc-mode",pc);
   $("authTitle").textContent=authMode==="login"?"ACCESS XEO":"CREATE ACCOUNT";
   $("authSub").textContent=authMode==="login"
-    ?"Enter your 6-digit access code."
-    :"Enter a 6-digit access code for your new account.";
+    ?(pc?"Type your 6-digit access code on your keyboard. Backspace deletes, Esc clears.":"Enter your 6-digit access code.")
+    :(pc?"Enter your name and username, press Enter, then type a 6-digit access code on your keyboard.":"Enter a 6-digit access code for your new account.");
   $("createFields").classList.toggle("hidden",authMode!=="create");
   $("switchAuth").textContent=authMode==="login"?"Create a new account":"Back to login";
   renderDots();
 }
+
+$("backToDevice").onclick=function(){
+  codeInput="";
+  $("createName").value="";
+  $("createUsername").value="";
+  $("accountScreen").classList.add("hidden");
+  $("deviceScreen").classList.remove("hidden");
+  const d=selectedDevice||state.device;
+  if(d){chooseDevice(d);}
+  renderDots();
+};
 
 $("switchAuth").onclick=function(){
   authMode=authMode==="login"?"create":"login";
@@ -1098,83 +1156,208 @@ document.querySelectorAll(".key").forEach(key=>{
   });
 });
 
-function processAuth(){
+document.addEventListener("keydown",e=>{
+  if($("accountScreen").classList.contains("hidden")){return;}
+  if($("onboard").style.display==="none"){return;}
+  if(!isPC()){return;}
+  const t=e.target;
+  if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA")){
+    if(e.key==="Enter"&&t.id==="createName"){e.preventDefault();$("createUsername").focus();}
+    else if(e.key==="Enter"&&t.id==="createUsername"){e.preventDefault();t.blur();}
+    return;
+  }
+  if(/^\d$/.test(e.key)){
+    if(codeInput.length<6){codeInput+=e.key;}
+  }else if(e.key==="Backspace"){
+    e.preventDefault();
+    codeInput=codeInput.slice(0,-1);
+  }else if(e.key==="Delete"||e.key==="Escape"){
+    codeInput="";
+  }else{
+    return;
+  }
+  renderDots();
+  if(codeInput.length===6){
+    setTimeout(processAuth,100);
+  }
+});
 
-  if(authMode==="login"){
-    const account=state.users.find(u=>u.code===codeInput);
-    if(!account){
-      codeInput="";
-      renderDots();
-      showToast("Incorrect access code.");
+function cyrb53(str){
+  let h1=0xdeadbeef,h2=0x41c6ce57;
+  for(let i=0;i<str.length;i++){
+    const ch=str.charCodeAt(i);
+    h1=Math.imul(h1^ch,2654435761);
+    h2=Math.imul(h2^ch,1597334677);
+  }
+  h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
+  h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+  return (4294967296*(2097151&h2)+(h1>>>0)).toString(36);
+}
+
+function codeClaimId(code){
+  return "c_"+cyrb53("xeo|"+code);
+}
+
+async function claimCredentials(username,code,id){
+  const c=cloud();
+  if(!c||!SYNC.ready||!c.runTransaction){return "offline";}
+  const uRef=c.doc(c.db,"xeo_claims","u_"+username);
+  const kRef=c.doc(c.db,"xeo_claims",codeClaimId(code));
+  try{
+    await c.runTransaction(c.db,async tx=>{
+      const u=await tx.get(uRef);
+      const k=await tx.get(kRef);
+      if(u.exists()&&u.data().owner!==id){throw new Error("USERNAME");}
+      if(k.exists()&&k.data().owner!==id){throw new Error("CODE");}
+      tx.set(uRef,{owner:id,t:Date.now()});
+      tx.set(kRef,{owner:id,t:Date.now()});
+    });
+    return "ok";
+  }catch(e){
+    if(e&&e.message==="USERNAME"){return "username";}
+    if(e&&e.message==="CODE"){return "code";}
+    console.warn("XEO credential claim failed",e);
+    return "error";
+  }
+}
+
+async function freshConflict(username,code){
+  const c=cloud();
+  if(!c){return null;}
+  try{
+    const snap=await c.getDocs(c.collection(c.db,"xeo_users"));
+    let res=null;
+    snap.docs.forEach(d=>{
+      const x=d.data();
+      if(x.username===username){res="username";}
+      else if(x.code===code&&!res){res="code";}
+    });
+    return res;
+  }catch(e){
+    return null;
+  }
+}
+
+async function backfillClaims(){
+  const me=state.account;
+  if(!me||!cloud()||!SYNC.ready){return;}
+  await claimCredentials(me.username,me.code,me.id);
+}
+
+let authBusy=false;
+
+async function processAuth(){
+
+  if(authBusy){return;}
+  authBusy=true;
+
+  try{
+
+    if(authMode==="login"){
+      const account=state.users.find(u=>u.code===codeInput);
+      if(!account){
+        codeInput="";
+        renderDots();
+        showToast("Incorrect access code.");
+        return;
+      }
+      state.accountId=account.id;
+      state.account=account;
+      applyPersonalFor(account.id);
+      if(!state.device){
+        state.device=selectedDevice||"Android";
+      }
+      save();
+      launchApp();
+      backfillClaims();
       return;
     }
-    state.accountId=account.id;
-    state.account=account;
-    applyPersonalFor(account.id);
-    if(!state.device){
-      state.device=selectedDevice||"Android";
+
+    const name=$("createName").value.trim();
+    const username=$("createUsername").value.trim().replace(/^@/,"").toLowerCase();
+
+    if(!name||!username){
+      codeInput="";
+      renderDots();
+      showToast("Enter your name and username.");
+      return;
     }
+
+    if(!/^[a-z0-9_.]{3,20}$/.test(username)){
+      codeInput="";
+      renderDots();
+      showToast("Username: 3-20 letters, numbers, _ or .");
+      return;
+    }
+
+    if(!/^\d{6}$/.test(codeInput)){
+      showToast("Code must contain 6 digits.");
+      return;
+    }
+
+    if(state.users.some(u=>u.username===username)){
+      codeInput="";
+      renderDots();
+      showToast("Username already exists.");
+      return;
+    }
+
+    if(state.users.some(u=>u.code===codeInput)){
+      codeInput="";
+      renderDots();
+      showToast("That code is already in use.");
+      return;
+    }
+
+    const id=uid();
+
+    if(cloud()&&SYNC.ready){
+      showToast("Checking availability...");
+      const fresh=await freshConflict(username,codeInput);
+      if(fresh){
+        codeInput="";
+        renderDots();
+        showToast(fresh==="username"?"Username already exists.":"That code is already in use.");
+        return;
+      }
+      const r=await claimCredentials(username,codeInput,id);
+      if(r==="username"||r==="code"){
+        codeInput="";
+        renderDots();
+        showToast(r==="username"?"Username already exists.":"That code is already in use.");
+        return;
+      }
+    }
+
+    const account={
+      id,
+      name,
+      username,
+      code:codeInput,
+      xp:0,
+      interests:["Growth"],
+      created:Date.now(),
+      notifications:[]
+    };
+
+    resetPersonal();
+    state.personalOwner=account.id;
+    state.users.push(account);
+    state.account=account;
+    state.accountId=account.id;
+    state.inbox=[{
+      id:Date.now(),
+      type:"system",
+      text:"Welcome to XEO. Your progression starts at 0 XP.",
+      time:Date.now()
+    }];
+
     save();
     launchApp();
-    return;
+
+  }finally{
+    authBusy=false;
   }
-
-  const name=$("createName").value.trim();
-  const username=$("createUsername").value.trim().replace(/^@/,"").toLowerCase();
-
-  if(!name||!username){
-    codeInput="";
-    renderDots();
-    showToast("Enter your name and username.");
-    return;
-  }
-
-  if(codeInput.length!==6){
-    showToast("Code must contain 6 digits.");
-    return;
-  }
-
-  if(state.users.some(u=>u.username===username)){
-    codeInput="";
-    renderDots();
-    showToast("Username already exists.");
-    return;
-  }
-
-  if(state.users.some(u=>u.code===codeInput)){
-    codeInput="";
-    renderDots();
-    showToast("That code is already in use.");
-    return;
-  }
-
-  const account={
-    id:uid(),
-    name,
-    username,
-    code:codeInput,
-    xp:0,
-    interests:["Growth"],
-    created:Date.now(),
-    notifications:[]
-  };
-
-  resetPersonal();
-  state.personalOwner=account.id;
-  state.users.push(account);
-  state.account=account;
-  state.accountId=account.id;
-  state.friends=[];
-  state.requests=[];
-  state.inbox=[{
-    id:Date.now(),
-    type:"system",
-    text:"Welcome to XEO. Your progression starts at 0 XP.",
-    time:Date.now()
-  }];
-
-  save();
-  launchApp();
 }
 
 function launchApp(){
@@ -1224,8 +1407,17 @@ function closeDrawer(){
 function ensureDaily(){
   const key=todayKey();
   if(state.lastActiveDate!==key){
+    state.tasks=[];
     state.completed={};
+    state.routineDone={};
     state.lastActiveDate=key;
+    persist();
+    cloudPush();
+  }
+  const wk=weekKey(0);
+  if(state.routineWeek!==wk){
+    state.routineWeek=wk;
+    state.routineMods=0;
     persist();
     cloudPush();
   }
@@ -1236,59 +1428,158 @@ function getModeMultiplier(){
   return mode?mode.mult:1;
 }
 
-function taskReward(task){
-  let reward=Math.min(50,Math.max(1,Number(task.xp)||1));
-  reward*=getModeMultiplier();
-  if(state.mode==="club5"&&/5am|wake|morning|early/i.test(task.name)){
-    reward*=1.2;
-  }
-  return Math.round(reward);
+const ROUTINE_MAX=25;
+const ROUTINE_MODS=3;
+
+function isSuspended(u){
+  return !!(u&&u.suspension&&u.suspension.until>Date.now());
 }
 
-function addXP(amount,task){
+function effXP(u){
+  const xp=(u&&u.xp)||0;
+  return isSuspended(u)?Math.min(xp,u.suspension.frozenXp||0):xp;
+}
 
-  const reward=taskReward(task);
-  const before=getRank(state.account.xp||0);
-  const oldLevel=levelFromXP(state.account.xp||0);
+function suspendedGuard(){
+  if(isSuspended(state.account)){
+    showToast("Your account is suspended.");
+    return true;
+  }
+  return false;
+}
 
-  state.account.xp=(state.account.xp||0)+reward;
+function normTask(name){
+  return String(name||"").trim().toLowerCase().replace(/\s+/g," ");
+}
 
-  state.totalDone=(state.totalDone||0)+1;
-  updateStreak();
-  state.bestDay=Math.max(state.bestDay||0,Object.keys(state.completed).length);
+function trackTaskName(name){
+  const me=state.account;
+  const n=normTask(name);
+  if(!me||!n){return;}
+  state.taskCounts=state.taskCounts||{};
+  state.taskCounts[n]=(state.taskCounts[n]||0)+1;
+  if(state.taskCounts[n]>7){
+    me.flags=me.flags||[];
+    const f=me.flags.find(x=>x.name===n);
+    if(f){
+      f.count=state.taskCounts[n];
+      f.time=Date.now();
+    }else{
+      me.flags.push({name:n,count:state.taskCounts[n],time:Date.now()});
+    }
+    me.flags=me.flags.slice(-20);
+  }
+}
 
-  const newLevel=levelFromXP(state.account.xp);
-  const after=getRank(state.account.xp);
+function taskReward(task){
+  let base=Number(task.reward);
+  if(!Number.isFinite(base)){
+    base=Math.max(15,Math.min(50,Number(task.xp)||15));
+  }
+  base*=getModeMultiplier();
+  if(state.mode==="club5"&&/5am|wake|morning|early/i.test(task.name)){
+    base*=1.2;
+  }
+  return Math.round(base);
+}
+
+function seededInt(seedStr,min,max){
+  const r=rng(hashStr(seedStr));
+  return min+Math.floor(r()*(max-min+1));
+}
+
+function routineXP(item,index,n){
+
+  const me=state.account;
+  const base=me.id+"|"+weekKey(0);
+  const k=index+1;
+
+  if(n<5){
+    return seededInt(base+"|"+item.id,50,75);
+  }
+
+  if(k<=15){
+    const g=Math.floor(index/5);
+    const r=rng(hashStr(base+"|grp"+g));
+    let boosted=false;
+    if(r()<0.6){
+      const cnt=r()<0.5?2:3;
+      const pos=[0,1,2,3,4];
+      for(let i=4;i>0;i--){
+        const j=Math.floor(r()*(i+1));
+        const tmp=pos[i];
+        pos[i]=pos[j];
+        pos[j]=tmp;
+      }
+      boosted=pos.slice(0,cnt).includes(index%5);
+    }
+    return boosted
+      ?seededInt(base+"|"+item.id+"|hi",86,100)
+      :seededInt(base+"|"+item.id+"|lo",50,85);
+  }
+
+  const cap=Math.max(50,100-5*(k-15));
+  return seededInt(base+"|"+item.id+"|dim",50,cap);
+}
+
+function routineRangeText(index,n){
+  const k=index+1;
+  if(n<5){return "50-75";}
+  if(k<=15){return "50-100";}
+  return "50-"+Math.max(50,100-5*(k-15));
+}
+
+function doneTodayCount(){
+  return Object.keys(state.completed||{}).length+Object.keys(state.routineDone||{}).length;
+}
+
+function awardXP(reward,text,isTask){
+
+  const me=state.account;
+  const before=getRank(effXP(me));
+  const oldLevel=levelFromXP(effXP(me));
+
+  me.xp=(me.xp||0)+reward;
+
+  if(isTask){
+    state.totalDone=(state.totalDone||0)+1;
+    updateStreak();
+    state.bestDay=Math.max(state.bestDay||0,doneTodayCount());
+  }
+
+  const after=getRank(effXP(me));
+  const newLevel=levelFromXP(effXP(me));
 
   state.feed.unshift({
-    user:state.account.name,
-    username:state.account.username,
-    text:`Completed ${task.name}`,
+    user:me.name,
+    username:me.username,
+    text,
     xp:reward,
     time:Date.now()
   });
 
   if(after.name!==before.name){
-    state.inbox.unshift({
-      id:Date.now(),
-      type:"achievement",
-      text:`Rank up: ${after.name}`,
-      time:Date.now()
-    });
+    state.inbox.unshift({id:Date.now(),type:"achievement",text:`Rank up: ${after.name}`,time:Date.now()});
   }
 
   if(newLevel>oldLevel){
-    state.inbox.unshift({
-      id:Date.now()+1,
-      type:"achievement",
-      text:`Level ${newLevel} reached.`,
-      time:Date.now()
-    });
+    state.inbox.unshift({id:Date.now()+1,type:"achievement",text:`Level ${newLevel} reached.`,time:Date.now()});
   }
 
   save();
   renderAll();
   showToast("+"+reward+" XP");
+}
+
+function undoXP(got,text){
+  const me=state.account;
+  me.xp=Math.max(0,(me.xp||0)-got);
+  state.totalDone=Math.max(0,(state.totalDone||0)-1);
+  const fi=state.feed.findIndex(f=>f.text===text&&f.xp===got);
+  if(fi>=0){state.feed.splice(fi,1);}
+  save();
+  renderAll();
+  showToast("-"+got+" XP");
 }
 
 function toggleTask(taskId){
@@ -1298,51 +1589,74 @@ function toggleTask(taskId){
   const task=state.tasks.find(t=>t.id===taskId);
   if(!task){return;}
 
+  const text="Completed "+task.name;
+
   if(state.completed[taskId]){
+    const got=state.completed[taskId].xp||0;
     delete state.completed[taskId];
-    save();
-    renderAll();
+    undoXP(got,text);
     return;
   }
 
-  state.completed[taskId]={
-    doneAt:Date.now(),
-    xp:taskReward(task)
-  };
+  const reward=taskReward(task);
 
-  addXP(0,task);
+  state.completed[taskId]={doneAt:Date.now(),xp:reward};
+
+  awardXP(reward,text,true);
+}
+
+function toggleRoutine(id){
+
+  ensureDaily();
+
+  const idx=state.routine.findIndex(t=>t.id===id);
+  if(idx<0){return;}
+
+  const item=state.routine[idx];
+  const text="Completed routine: "+item.name;
+
+  if(state.routineDone[id]){
+    const got=state.routineDone[id].xp||0;
+    delete state.routineDone[id];
+    undoXP(got,text);
+    return;
+  }
+
+  const xp=Math.round(routineXP(item,idx,state.routine.length)*getModeMultiplier());
+
+  state.routineDone[id]={doneAt:Date.now(),xp};
+
+  awardXP(xp,text,true);
 }
 
 function createTask(){
 
   const name=$("taskName").value.trim();
   const desc=$("taskDesc").value.trim();
-  let xp=Number($("taskXP").value);
 
   if(!name){
     showToast("Task name is required.");
     return;
   }
 
-  if(!Number.isFinite(xp)){xp=10;}
-
-  xp=Math.max(1,Math.min(50,Math.round(xp)));
+  ensureDaily();
 
   state.tasks.push({
     id:uid(),
     name,
     desc,
-    xp,
+    reward:15+Math.floor(Math.random()*36),
     created:Date.now()
   });
 
+  trackTaskName(name);
   state.tasksCreated=(state.tasksCreated||0)+1;
+
   save();
   closeModal("taskModal");
 
   $("taskName").value="";
   $("taskDesc").value="";
-  $("taskXP").value="10";
 
   renderAll();
   showToast("Task added.");
@@ -1375,31 +1689,117 @@ function showAddTask(){
   openModal("taskModal");
 }
 
-function renderGoals(containerId){
+/* ROUTINE EDITOR */
 
-  const el=$(containerId);
-  const tasks=state.tasks;
+let routineDraft=[];
 
-  if(!tasks.length){
-    el.innerHTML=`
-      <div class="notice empty-routine">
-        <b>ROUTINE IS EMPTY.</b>
-        <small>Add your first task. XEO gives you a blank slate.</small>
+function openRoutineEditor(){
+  ensureDaily();
+  routineDraft=state.routine.map(t=>({id:t.id,name:t.name}));
+  renderRoutineEditor();
+  openModal("routineModal");
+}
+
+function renderRoutineEditor(){
+  const used=state.routineMods||0;
+  const first=state.routine.length===0;
+  $("routineInfo").textContent=
+    "Up to "+ROUTINE_MAX+" tasks. "+
+    (first?"Your first setup is free. ":"Saving changes uses 1 modification. ")+
+    "Modifications this week: "+used+"/"+ROUTINE_MODS+".";
+  $("routineRows").innerHTML=routineDraft.map((t,i)=>`
+    <div class="item">
+      <div class="left">
+        <input class="rt-input" maxlength="40" placeholder="Routine task ${i+1}" value="${esc(t.name)}" oninput="routineDraft[${i}].name=this.value">
       </div>
-    `;
+      <button class="btn small" onclick="removeRoutineRow(${i})">REMOVE</button>
+    </div>
+  `).join("")||`<div class="notice">No routine tasks yet. Add your first row.</div>`;
+}
+
+function addRoutineRow(){
+  if(routineDraft.length>=ROUTINE_MAX){
+    showToast("Limit reached: "+ROUTINE_MAX+" routine tasks.");
+    return;
+  }
+  routineDraft.push({id:uid(),name:""});
+  renderRoutineEditor();
+}
+
+function removeRoutineRow(i){
+  routineDraft.splice(i,1);
+  renderRoutineEditor();
+}
+
+async function saveRoutine(){
+
+  const draft=routineDraft
+    .map(t=>({id:t.id,name:t.name.trim()}))
+    .filter(t=>t.name);
+
+  if(draft.length>ROUTINE_MAX){
+    showToast("Limit reached: "+ROUTINE_MAX+" routine tasks.");
     return;
   }
 
-  el.innerHTML=tasks.map(task=>{
+  const old=state.routine;
+  const sig=a=>stable(a.map(t=>[t.id,t.name]));
 
-    const done=!!state.completed[task.id];
+  if(sig(draft)===sig(old)){
+    closeModal("routineModal");
+    return;
+  }
 
+  const wasEmpty=old.length===0;
+  const used=state.routineMods||0;
+
+  if(!wasEmpty&&used>=ROUTINE_MODS){
+    showToast("Routine limit reached ("+used+"/"+ROUTINE_MODS+" this week).");
+    return;
+  }
+
+  if(!wasEmpty){
+    const ok=await askConfirm(
+      "SAVE ROUTINE",
+      "This uses 1 of your "+ROUTINE_MODS+" weekly modifications ("+(used+1)+"/"+ROUTINE_MODS+"). Continue?",
+      "SAVE"
+    );
+    if(!ok){return;}
+  }
+
+  const oldById={};
+  old.forEach(t=>{oldById[t.id]=t.name;});
+
+  draft.forEach(t=>{
+    if(oldById[t.id]!==t.name){trackTaskName(t.name);}
+  });
+
+  const keep=new Set(draft.map(t=>t.id));
+  Object.keys(state.routineDone).forEach(id=>{
+    if(!keep.has(id)){delete state.routineDone[id];}
+  });
+
+  state.routine=draft;
+
+  if(!wasEmpty){state.routineMods=used+1;}
+
+  save();
+  closeModal("routineModal");
+  renderAll();
+  showToast("Routine saved.");
+}
+
+/* LISTS */
+
+function taskItemsHTML(){
+  return state.tasks.map(task=>{
+    const done=state.completed[task.id];
     return `
       <div class="item ${done?"done":""}">
         <div class="left">
           <div>
             <b>${esc(task.name)}</b>
-            <small>${esc(task.desc||"Custom objective")} • +${taskReward(task)} XP</small>
+            <small>${esc(task.desc||"Daily task")} • ${done?"+"+done.xp+" XP":"15-50 XP"}</small>
           </div>
         </div>
         <div class="row">
@@ -1410,8 +1810,65 @@ function renderGoals(containerId){
         </div>
       </div>
     `;
-
   }).join("");
+}
+
+function routineItemsHTML(){
+  const n=state.routine.length;
+  return state.routine.map((t,i)=>{
+    const done=state.routineDone[t.id];
+    return `
+      <div class="item ${done?"done":""}">
+        <div class="left">
+          <div>
+            <b>${esc(t.name)}</b>
+            <small>Routine #${i+1} • ${done?"+"+done.xp+" XP":routineRangeText(i,n)+" XP"}</small>
+          </div>
+        </div>
+        <button class="complete ${done?"done":""}" onclick="toggleRoutine('${t.id}')">
+          ${done?"DONE":"COMPLETE"}
+        </button>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderGoals(containerId){
+  $(containerId).innerHTML=taskItemsHTML()||`
+    <div class="notice empty-routine">
+      <b>NO TASKS TODAY.</b>
+      <small>Add a task. Daily tasks reset at 3:00 AM.</small>
+    </div>
+  `;
+}
+
+function renderHomeGoals(){
+  const r=routineItemsHTML();
+  const t=taskItemsHTML();
+  if(!r&&!t){
+    $("homeGoals").innerHTML=`
+      <div class="notice empty-routine">
+        <b>NOTHING PLANNED YET.</b>
+        <small>Add a task or build your daily routine in the tracker.</small>
+      </div>
+    `;
+    return;
+  }
+  $("homeGoals").innerHTML=
+    (r?`<div class="label">DAILY ROUTINE</div>${r}`:"")+
+    (t?`<div class="label" style="margin-top:6px">DAILY TASKS</div>${t}`:"");
+}
+
+function renderRoutine(){
+  const n=state.routine.length;
+  $("routineMeta").textContent=n+"/"+ROUTINE_MAX+" TASKS • MODIFIED "+(state.routineMods||0)+"/"+ROUTINE_MODS+" THIS WEEK";
+  $("trackerRoutine").innerHTML=routineItemsHTML()||`
+    <div class="notice">
+      <b>NO ROUTINE YET.</b><br>
+      Press EDIT ROUTINE to build your daily routine (up to 25 tasks).
+      Your first setup is free. Later changes use your 3 weekly modifications.
+    </div>
+  `;
 }
 
 function renderDashboard(){
@@ -1419,9 +1876,17 @@ function renderDashboard(){
   if(!state.account){return;}
 
   const xp=state.account.xp||0;
-  const level=levelFromXP(xp);
-  const rank=getRank(xp);
+  const exs=effXP(state.account);
+  const level=levelFromXP(exs);
+  const rank=getRank(exs);
   const next=RANKS[RANKS.indexOf(rank)+1];
+
+  const sb=$("suspendBanner");
+  if(isSuspended(state.account)){
+    sb.innerHTML=`<div class="notice" style="margin-bottom:14px"><b>ACCOUNT SUSPENDED</b> until ${esc(new Date(state.account.suspension.until).toLocaleString())}.<br>Level-ups and rank-ups are frozen. Social, Activity Feed and Crew tasks are blocked. XP still accumulates.</div>`;
+  }else{
+    sb.innerHTML="";
+  }
 
   $("dashName").textContent=(state.account.name||"PLAYER").toUpperCase();
   $("dashLevel").textContent=level;
@@ -1431,7 +1896,7 @@ function renderDashboard(){
   let progress=0;
 
   if(next){
-    progress=((xp-rank.min)/(next.min-rank.min))*100;
+    progress=((exs-rank.min)/(next.min-rank.min))*100;
   }else{
     progress=100;
   }
@@ -1441,12 +1906,12 @@ function renderDashboard(){
   $("dashXPFill").style.width=progress+"%";
 
   $("dashNextRank").textContent=next
-    ?`${Math.max(0,next.min-xp)} XP to ${next.name}`
+    ?`${Math.max(0,next.min-exs)} XP to ${next.name}`
     :"MAXIMUM RANK";
 
   $("statXP").textContent=xp;
-  $("statToday").textContent=Object.keys(state.completed).length;
-  $("statTasks").textContent=state.tasks.length;
+  $("statToday").textContent=doneTodayCount();
+  $("statTasks").textContent=state.tasks.length+state.routine.length;
   $("statStreak").textContent=streakOf(state);
 
   const arc=currentArc();
@@ -1563,6 +2028,8 @@ function renderEvents(){
 
 function searchFriends(){
 
+  if(suspendedGuard()){return;}
+
   const q=$("friendSearch").value.trim().replace(/^@/,"").toLowerCase();
 
   const results=state.users.filter(u=>{
@@ -1605,7 +2072,7 @@ function userCard(u,mode){
         <div class="mini-avatar">${esc((u.name||"X")[0])}</div>
         <div>
           <b>${esc(u.name)}</b>
-          <small>@${esc(u.username)} • LV ${levelFromXP(u.xp||0)} • ${getRank(u.xp||0).name}${isFriend?" • STREAK "+streakOf(u):""}</small>
+          <small>@${esc(u.username)} • LV ${levelFromXP(effXP(u))} • ${getRank(effXP(u)).name}${isFriend?" • STREAK "+streakOf(u):""}</small>
         </div>
       </div>
       ${action}
@@ -1620,6 +2087,8 @@ function pushNote(u,text){
 }
 
 function sendFriendRequest(id){
+
+  if(suspendedGuard()){return;}
 
   const me=state.account;
   const user=state.users.find(u=>u.id===id);
@@ -1656,6 +2125,8 @@ function sendFriendRequest(id){
 
 function acceptFriend(id){
 
+  if(suspendedGuard()){return;}
+
   const me=state.account;
   const user=state.users.find(u=>u.id===id);
 
@@ -1679,6 +2150,8 @@ function acceptFriend(id){
 
 function declineFriend(id){
 
+  if(suspendedGuard()){return;}
+
   const me=state.account;
 
   if(!me){return;}
@@ -1691,6 +2164,8 @@ function declineFriend(id){
 }
 
 function addFriendByUsername(){
+
+  if(suspendedGuard()){return;}
 
   const username=$("friendUsername").value.trim().replace(/^@/,"").toLowerCase();
 
@@ -1709,6 +2184,8 @@ function addFriendByUsername(){
 }
 
 async function removeFriend(id){
+
+  if(suspendedGuard()){return;}
 
   const me=state.account;
   const user=state.users.find(u=>u.id===id);
@@ -1736,6 +2213,8 @@ async function removeFriend(id){
 
 function viewFriend(id){
 
+  if(suspendedGuard()){return;}
+
   const me=state.account;
   const u=state.users.find(x=>x.id===id);
 
@@ -1745,7 +2224,7 @@ function viewFriend(id){
   }
 
   const xp=u.xp||0;
-  const rank=getRank(xp);
+  const rank=getRank(effXP(u));
   const mode=MODES.find(m=>m.id===u.mode)||MODES[0];
 
   const tags=(u.badges||[]).map(bid=>{
@@ -1758,7 +2237,7 @@ function viewFriend(id){
     <b>@${esc(u.username)}</b>
 
     <div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-top:16px">
-      <div class="stat card"><div class="label">LEVEL</div><div class="n">${levelFromXP(xp)}</div></div>
+      <div class="stat card"><div class="label">LEVEL</div><div class="n">${levelFromXP(effXP(u))}</div></div>
       <div class="stat card"><div class="label">RANK</div><div class="n">${rank.name}</div></div>
       <div class="stat card"><div class="label">STREAK</div><div class="n">${streakOf(u)}</div></div>
       <div class="stat card"><div class="label">XP</div><div class="n">${xp}</div></div>
@@ -1778,6 +2257,13 @@ function renderSocial(){
   const me=state.account;
 
   if(!me){return;}
+
+  if(isSuspended(me)){
+    $("friendRequests").innerHTML="";
+    $("friendResults").innerHTML=`<div class="notice"><b>SOCIAL IS LOCKED.</b><br>Your account is suspended until ${esc(new Date(me.suspension.until).toLocaleString())}.</div>`;
+    $("feed").innerHTML=`<div class="notice">The activity feed is locked while your account is suspended.</div>`;
+    return;
+  }
 
   const reqs=(me.friendReqs||[])
     .map(id=>state.users.find(x=>x.id===id))
@@ -1839,6 +2325,8 @@ function renderSocial(){
 
 function createCrew(){
 
+  if(suspendedGuard()){return;}
+
   const name=$("crewName").value.trim();
   const desc=$("crewDesc").value.trim();
   const tags=$("crewTags").value.split(",").map(x=>x.trim()).filter(Boolean);
@@ -1883,6 +2371,8 @@ function createCrew(){
 
 function requestCrew(){
 
+  if(suspendedGuard()){return;}
+
   const code=$("crewCodeInput").value.trim().toUpperCase();
 
   const crew=state.crews.find(c=>c.code===code);
@@ -1899,6 +2389,11 @@ function requestCrew(){
 
   if(myCrew()){
     showToast("Leave your current clan first.");
+    return;
+  }
+
+  if(crew.members.length>=CREW_MAX){
+    showToast("This clan is full ("+CREW_MAX+"/"+CREW_MAX+").");
     return;
   }
 
@@ -1927,6 +2422,11 @@ function acceptCrew(userId){
   if(!crew||crew.owner!==state.account.id){return;}
 
   if(crew.members.includes(userId)){return;}
+
+  if(crew.members.length>=CREW_MAX){
+    showToast("Your clan is full ("+CREW_MAX+"/"+CREW_MAX+").");
+    return;
+  }
 
   crew.requests=crew.requests.filter(x=>x!==userId);
   crew.members.push(userId);
@@ -1980,10 +2480,12 @@ const CLAN_TASKS=[
 "Stick to your routine all day","Do your hardest task before noon","Say no to one distraction","Review your progress in XEO","Set a goal for next week","Reflect on what you learned today","Fix one small problem you ignored","Do 5 minutes of a habit you skipped","Finish all tasks in your XEO routine","Go to bed without scrolling"
 ];
 
+const CREW_MAX=25;
+
 const CLAN_TIERS={
-  BASE:{max:300,label:"BASE"},
-  GOOD:{max:425,label:"+50% TEAMWORK"},
-  FULL:{max:500,label:"DOUBLE XP"}
+  BASE:{max:300,label:"UNDER 60%"},
+  GOOD:{max:450,label:"+50% BONUS"},
+  FULL:{max:500,label:"100% TEAM"}
 };
 
 function fmtDate(d){
@@ -1991,7 +2493,7 @@ function fmtDate(d){
 }
 
 function weekKey(off){
-  const d=new Date();
+  const d=new Date(Date.now()-3*3600*1000);
   const day=(d.getDay()+6)%7;
   d.setDate(d.getDate()-day+(off||0)*7);
   return fmtDate(d);
@@ -2057,6 +2559,7 @@ function clanPayout(crew,week,u){
 }
 
 function toggleClanTask(idx){
+  if(suspendedGuard()){return;}
   const crew=myCrew();
   const me=state.account;
   if(!crew||!me){return;}
@@ -2072,38 +2575,12 @@ function toggleClanTask(idx){
 }
 
 function grantXP(amount,text){
-
-  const me=state.account;
-  const before=getRank(me.xp||0);
-  const oldLevel=levelFromXP(me.xp||0);
-
-  me.xp=(me.xp||0)+amount;
-
-  const newLevel=levelFromXP(me.xp);
-  const after=getRank(me.xp);
-
-  state.feed.unshift({
-    user:me.name,
-    username:me.username,
-    text,
-    xp:amount,
-    time:Date.now()
-  });
-
-  if(after.name!==before.name){
-    state.inbox.unshift({id:Date.now(),type:"achievement",text:`Rank up: ${after.name}`,time:Date.now()});
-  }
-
-  if(newLevel>oldLevel){
-    state.inbox.unshift({id:Date.now()+1,type:"achievement",text:`Level ${newLevel} reached.`,time:Date.now()});
-  }
-
-  save();
-  renderAll();
-  showToast("+"+amount+" XP");
+  awardXP(amount,text,false);
 }
 
 function claimClan(week){
+
+  if(suspendedGuard()){return;}
 
   const crew=myCrew();
   const me=state.account;
@@ -2151,6 +2628,16 @@ function renderCrew(){
     return;
   }
 
+  if(isSuspended(state.account)){
+    el.innerHTML=`
+      <div class="notice">
+        <b>CREW TASKS ARE LOCKED.</b><br>
+        Your account is suspended until ${esc(new Date(state.account.suspension.until).toLocaleString())}.
+      </div>
+    `;
+    return;
+  }
+
   const me=state.account;
   const owner=crew.owner===me.id;
   const lvl=crew.level||1;
@@ -2178,7 +2665,7 @@ function renderCrew(){
         ${(crew.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join("")}
       </div>
       <div style="margin-top:13px;font-weight:900">
-        ${crew.members.length} MEMBER${crew.members.length===1?"":"S"}
+        ${crew.members.length}/${CREW_MAX} MEMBER${crew.members.length===1?"":"S"}
         ${owner?`<span style="margin-left:12px">ROOM CODE: ${esc(crew.code)}</span>`:""}
       </div>
       <div class="row" style="margin-top:14px">
@@ -2227,9 +2714,9 @@ function renderCrew(){
 
       <div class="notice" style="margin-top:12px">
         <b>YOUR XP THIS WEEK: ${proj.xp}</b><br>
-        A member participates by completing at least 1 clan task. Base reward is 300 XP (250 + 50 clan bonus).
-        With 3+ members, if the participation ratio reaches 3:5 (60% of the crew) everyone gets +50%.
-        If every member participates the reward doubles (500 XP max).
+        A member participates by completing at least 1 clan task.
+        Under 60% participation: up to 300 XP. 60% or more: a 50% XP bonus (up to 450 XP).
+        100% participation: 500 XP. Bonus tiers need 3+ members.
         Your XP scales with the tasks you finish and your clan level. Rewards are claimed after the week ends.
       </div>
     </div>
@@ -2272,11 +2759,14 @@ function renderCrew(){
       </div>
     </div>
 
-    <div class="list" style="margin-top:12px">
-      ${crew.members.map(id=>{
-        const u=state.users.find(x=>x.id===id);
-        return u?userCard(u,"crew"):"";
-      }).join("")}
+    <div class="section-card card" style="margin-top:12px">
+      <div class="section-head"><h2>ROSTER ${crew.members.length}/${CREW_MAX}</h2></div>
+      <div class="list">
+        ${crew.members.map(id=>{
+          const u=state.users.find(x=>x.id===id);
+          return u?userCard(u,"crew"):"";
+        }).join("")}
+      </div>
     </div>
 
     ${
@@ -2374,6 +2864,10 @@ function addCrewMember(){
   }
   if(crew.members.includes(user.id)){
     showToast("Already a member.");
+    return;
+  }
+  if(crew.members.length>=CREW_MAX){
+    showToast("Your clan is full ("+CREW_MAX+"/"+CREW_MAX+").");
     return;
   }
   if(state.crews.some(c=>(c.members||[]).includes(user.id))){
@@ -2477,9 +2971,9 @@ function renderProfile(){
   $("profileName").textContent=u.name||"PLAYER";
   $("profileUsername").textContent="@"+u.username;
   $("profileXP").textContent=u.xp||0;
-  $("profileLevel").textContent=levelFromXP(u.xp||0);
+  $("profileLevel").textContent=levelFromXP(effXP(u));
 
-  const rank=getRank(u.xp||0);
+  const rank=getRank(effXP(u));
 
   $("profileRank").textContent=rank.name;
   $("profileRankSymbol").innerHTML=rankImage(rank);
@@ -2557,8 +3051,9 @@ function renderAll(){
 
   ensureDaily();
   renderDashboard();
-  renderGoals("homeGoals");
+  renderHomeGoals();
   renderGoals("trackerGoals");
+  renderRoutine();
   renderModes();
   renderEvents();
   renderSocial();
@@ -2577,13 +3072,12 @@ function renderAll(){
 
 function tickClock(){
   const e=$("eventClock");
-  if(e){e.textContent=new Date().toLocaleString();}
+  if(e){
+    e.textContent=new Date().toLocaleString();
+  }
 }
 
-(function clockLoop(){
-  tickClock();
-  setTimeout(clockLoop,1000-(Date.now()%1000)+5);
-})();
+setInterval(tickClock,1000);
 
 document.addEventListener("visibilitychange",()=>{
   if(!document.hidden){tickClock();}
@@ -2612,14 +3106,44 @@ $("logoTap").addEventListener("click",async()=>{
   }
 });
 
+function adminFlags(){
+  const out=[];
+  state.users.forEach(u=>(u.flags||[]).forEach(f=>out.push({u,f})));
+  return out;
+}
+
+function renderAdminAlerts(){
+  const arr=adminFlags();
+  $("adminAlerts").textContent=arr.length;
+  $("adminAlertList").innerHTML=arr.map(a=>`
+    <div class="item">
+      <div class="left">
+        <div>
+          <b>@${esc(a.u.username)} repeated a task</b>
+          <small>"${esc(a.f.name)}" entered ${a.f.count} times</small>
+        </div>
+      </div>
+      <button class="btn small" onclick="adminDismiss('${a.u.id}')">DISMISS</button>
+    </div>
+  `).join("")||`<div class="notice">No alerts.</div>`;
+}
+
+function adminDismiss(id){
+  const u=state.users.find(x=>x.id===id);
+  if(!u){return;}
+  u.flags=[];
+  save();
+  renderAdminAlerts();
+}
+
 function openAdmin(){
 
   $("adminUsers").textContent=state.users.length;
   $("adminCrews").textContent=state.crews.length;
-  $("adminAlerts").textContent=state.inbox.length;
   $("adminDevice").textContent=state.device||"—";
   $("adminSearch").value="";
   $("adminResults").innerHTML="";
+  renderAdminAlerts();
 
   openModal("adminModal");
 }
@@ -2636,11 +3160,11 @@ function adminSearchUser(){
     <div class="item">
       <div>
         <b>${esc(u.name)}</b>
-        <small>@${esc(u.username)} • ${u.xp||0} XP</small>
+        <small>@${esc(u.username)} • ${u.xp||0} XP${isSuspended(u)?" • SUSPENDED until "+esc(new Date(u.suspension.until).toLocaleString()):""}</small>
       </div>
       <div class="row">
-        <button class="btn small" onclick="adminRestrict('${u.id}')">
-          ${u.restricted?"UNRESTRICT":"RESTRICT"}
+        <button class="btn small" onclick="adminSuspend('${u.id}')">
+          ${isSuspended(u)?"UNSUSPEND":"SUSPEND"}
         </button>
         <button class="btn small" onclick="adminDelete('${u.id}')">DELETE</button>
       </div>
@@ -2649,18 +3173,52 @@ function adminSearchUser(){
   ||`<div class="notice">No account found.</div>`;
 }
 
-function adminRestrict(id){
+function parseDuration(str){
+  const m=String(str||"").trim().toLowerCase().match(/^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|d|day|days)?$/);
+  if(!m){return 0;}
+  const n=parseFloat(m[1]);
+  const unit=m[2]||"d";
+  const ms=/^h/.test(unit)?n*3600000:n*86400000;
+  return ms>0?ms:0;
+}
+
+async function adminSuspend(id){
 
   const u=state.users.find(x=>x.id===id);
 
   if(!u){return;}
 
-  u.restricted=!u.restricted;
+  if(isSuspended(u)){
+    u.suspension=null;
+    pushNote(u,"Your suspension was lifted.");
+    save();
+    adminSearchUser();
+    showToast("Suspension lifted.");
+    return;
+  }
+
+  if(u.id===state.account.id){
+    showToast("You cannot suspend the active account.");
+    return;
+  }
+
+  const v=await askPrompt("SUSPEND ACCOUNT","How long should @"+u.username+" be suspended? Examples: 12h, 3d, 7d","3d");
+
+  if(v===null){return;}
+
+  const ms=parseDuration(v);
+
+  if(!ms){
+    showToast("Enter a valid duration like 12h or 3d.");
+    return;
+  }
+
+  u.suspension={until:Date.now()+ms,frozenXp:u.xp||0,at:Date.now()};
+  pushNote(u,"Your account was suspended until "+new Date(u.suspension.until).toLocaleString()+".");
 
   save();
   adminSearchUser();
-
-  showToast(u.restricted?"Account restricted.":"Restriction removed.");
+  showToast("Account suspended.");
 }
 
 async function adminDelete(id){
@@ -2674,8 +3232,14 @@ async function adminDelete(id){
     return;
   }
 
+  const gone=state.users.find(u=>u.id===id);
+
   state.users=state.users.filter(u=>u.id!==id);
   cloudDelete("xeo_users",id);
+  if(gone){
+    cloudDelete("xeo_claims","u_"+gone.username);
+    cloudDelete("xeo_claims",codeClaimId(gone.code));
+  }
   state.friends=state.friends.filter(x=>x!==id);
 
   state.crews.forEach(c=>{
@@ -2734,7 +3298,7 @@ updateNetTag();
 /* STREAK */
 
 function dayKey(off){
-  const d=new Date();
+  const d=new Date(Date.now()-3*3600*1000);
   d.setDate(d.getDate()+off);
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
@@ -2765,7 +3329,7 @@ const ACH=[];
   add("streak",[[2,"BACK TO BACK"],[3,"THREE PEAT"],[5,"FIVE ALIVE"],[7,"WEEK WARRIOR"],[10,"TEN IN A ROW"],[14,"FORTNIGHT"],[21,"HABIT FORMED"],[25,"TWENTY FIVE DAYS"],[30,"MONTH MASTER"],[45,"UNBROKEN"],[60,"TWO MONTHS"],[75,"RELENTLESS FLAME"],[90,"QUARTER YEAR"],[100,"HUNDRED DAYS"],[150,"ETERNAL FLAME"],[200,"DOUBLE CENTURY"],[300,"NEARLY A YEAR"],[365,"FULL YEAR"]],c=>c.streak,n=>`Reach a ${n} day streak`);
   ["BRONZE BORN","GOLD STANDARD","SILVER LINING","DIAMOND MIND","MASTER CLASS","GRANDMASTER STATUS","LEGENDARY"].forEach((name,i)=>{
     const r=RANKS[i+1];
-    ACH.push({id:"rank"+r.name,name,desc:`Reach ${r.name} rank`,test:c=>c.xp>=r.min});
+    ACH.push({id:"rank"+r.name,name,desc:`Reach ${r.name} rank`,test:c=>c.exs>=r.min});
   });
   add("fr",[[1,"FIRST ALLY"],[3,"SMALL CIRCLE"],[5,"SQUAD"],[10,"POPULAR"],[15,"NETWORKER"],[25,"COMMUNITY"],[50,"SOCIAL TITAN"]],c=>c.friends,n=>`Have ${n} friend${n===1?"":"s"}`);
   ACH.push({id:"crewOwner",name:"CREW FOUNDER",desc:"Create a crew",test:c=>c.crewOwner});
@@ -2788,7 +3352,8 @@ function achCtx(){
   const myCrews=state.crews.filter(c=>(c.members||[]).includes(me.id));
   return {
     xp,
-    level:levelFromXP(xp),
+    exs:effXP(me),
+    level:levelFromXP(effXP(me)),
     done:state.totalDone||0,
     streak:Math.max(state.bestStreak||0,streakOf(state)),
     friends:(me.friends||[]).length,
@@ -2860,7 +3425,7 @@ function toggleBadge(id){
 
 /* CLOUD SYNC (Firestore) */
 
-const PERSONAL=["friends","requests","inbox","feed","tasks","completed","mode","privacy","crewId","streak","lastActiveDate","modeSince","lastStreakDate","badges","totalDone","bestStreak","bestDay","tasksCreated","modesUsed","profileEdited","clanClaimed"];
+const PERSONAL=["friends","requests","inbox","feed","tasks","completed","mode","privacy","crewId","streak","lastActiveDate","modeSince","lastStreakDate","badges","totalDone","bestStreak","bestDay","tasksCreated","modesUsed","profileEdited","clanClaimed","routine","routineDone","routineWeek","routineMods","taskCounts"];
 const SYNC={ready:false,synced:{},obj:{},cloudData:{},timer:null,listening:false,warned:false,promise:null};
 
 function cloud(){
@@ -2922,8 +3487,9 @@ function personalData(){
 function userPayload(u){
   const p=clean(u);
   delete p.data;
+  delete p.dataJson;
   if(state.account&&u.id===state.account.id){
-    p.data=personalData();
+    p.dataJson=stable(personalData());
   }
   return p;
 }
@@ -2949,12 +3515,8 @@ async function doPush(){
       const k="u:"+u.id;
       if(SYNC.synced[k]!==j){
         const ref=c.doc(c.db,"xeo_users",u.id);
-        if(u.id===myId){
-          await c.setDoc(ref,p);
-        }else{
-          const part=diffFields(p,SYNC.obj[k]);
-          if(Object.keys(part).length){await c.setDoc(ref,part,{merge:true});}
-        }
+        const part=diffFields(p,SYNC.obj[k]);
+        if(Object.keys(part).length){await c.setDoc(ref,part,{merge:true});}
         SYNC.synced[k]=j;
         SYNC.obj[k]=clean(p);
       }
@@ -2985,7 +3547,8 @@ async function cloudDelete(col,id){
   if(!c){return;}
   try{
     await c.deleteDoc(c.doc(c.db,col,id));
-    delete SYNC.synced[(col==="xeo_users"?"u:":"c:")+id];
+    if(col==="xeo_users"){delete SYNC.synced["u:"+id];}
+    else if(col==="xeo_crews"){delete SYNC.synced["c:"+id];}
   }catch(e){
     console.warn("XEO sync delete failed",e);
   }
@@ -2995,7 +3558,8 @@ function buildSynced(us,cs,myId){
   const m={};
   us.forEach(d=>{
     const x=clean(d.data);
-    if(d.id!==myId){delete x.data;}
+    delete x.data;
+    if(d.id!==myId){delete x.dataJson;}
     m["u:"+d.id]=stable(x);
   });
   cs.forEach(d=>{
@@ -3008,7 +3572,8 @@ function buildObjs(us,cs,myId){
   const m={};
   us.forEach(d=>{
     const x=clean(d.data);
-    if(d.id!==myId){delete x.data;}
+    delete x.data;
+    if(d.id!==myId){delete x.dataJson;}
     m["u:"+d.id]=x;
   });
   cs.forEach(d=>{
@@ -3035,11 +3600,19 @@ function applyCloud(us,cs,initial){
   const oldCrews=state.crews;
 
   const synced=buildSynced(us,cs,myId);
+  let lostAccount=false;
 
   const users=us.map(d=>{
     const x=Object.assign({},d.data);
-    SYNC.cloudData[d.id]=x.data||null;
+    let pd=null;
+    if(x.dataJson){
+      try{pd=JSON.parse(x.dataJson);}catch(e){pd=null;}
+    }else if(x.data){
+      pd=x.data;
+    }
+    SYNC.cloudData[d.id]=pd;
     delete x.data;
+    delete x.dataJson;
     x.id=x.id||d.id;
     return x;
   });
@@ -3047,7 +3620,14 @@ function applyCloud(us,cs,initial){
   if(keep){
     oldUsers.forEach(u=>{
       const i=users.findIndex(x=>x.id===u.id);
-      if(i<0){users.push(u);}
+      if(i<0){
+        const clash=users.some(x=>x.username===u.username||x.code===u.code);
+        if(clash){
+          if(oldMine&&oldMine.id===u.id){lostAccount=true;}
+        }else{
+          users.push(u);
+        }
+      }
     });
     if(oldMine){
       const i=users.findIndex(x=>x.id===oldMine.id);
@@ -3075,6 +3655,17 @@ function applyCloud(us,cs,initial){
       const i=crews.findIndex(c=>c.id===lc.id);
       if(i>=0){crews[i]=lc;}else{crews.push(lc);}
     });
+  }
+
+  if(lostAccount){
+    state.users=users;
+    state.crews=crews;
+    state.account=null;
+    state.accountId=null;
+    persist();
+    showToast("That username or code was taken. Please create your account again.");
+    setTimeout(()=>location.reload(),1800);
+    return;
   }
 
   state.users=users;
@@ -3124,6 +3715,7 @@ async function cloudPull(){
     SYNC.ready=true;
     startListeners();
     cloudPush();
+    backfillClaims();
     return true;
   }catch(e){
     console.warn("XEO sync pull failed",e);
@@ -3181,6 +3773,16 @@ window.addEventListener("online",()=>{
 });
 
 SYNC.promise=waitFirebase(4000).then(cloudPull);
+
+
+/* 3:00 AM ROLLOVER CHECK */
+
+setInterval(()=>{
+  if(state.account&&state.lastActiveDate&&state.lastActiveDate!==todayKey()){
+    ensureDaily();
+    renderAll();
+  }
+},30000);
 
 
 /* START XEO */
